@@ -148,7 +148,7 @@ my $out2 = IO::File->new(">".$redundancy_seq_file) || die $!;
 print $out2 $restset; 
 $out2->close;
 
-print "@@\t".$input."\t".$contig_count."\n";
+# print "@@\t".$input."\t".$contig_count."\n";
 
 
 #######################

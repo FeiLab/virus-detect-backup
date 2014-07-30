@@ -1,19 +1,23 @@
 #!/usr/bin/env perl
+
 use strict;
 use warnings;
 use Getopt::Long;
 use Cwd;
 use FindBin;
+use lib "$FindBin::RealBin/PerlLib";
+use Util;
 use File::Basename;
+
 my $usage = <<_EOUSAGE_;
 
 #########################################################################################
-# bwa_remove.pl --file_list <FILE> --reference <FILE>
+# bwa_remove.pl --file <FILE> --reference <FILE>
 #		--max_dist[INT] --max_open [INT] --max_extension [INT] --len_seed [INT] --dist_seed [INT] --thread_num [INT]
 #
 # Required(2):
-#  --file_list	The name of a txt file containing a list of input file names without any suffix
-#  --reference  a fasta file containing the host reference genome or transcriptom
+#  --file	The name of input read file
+#  --reference  a fasta file containing the host reference genome or transcriptome
 #
 # BWA-related options(6):
 #  --max_dist      Maximum edit distance [1]  
@@ -27,29 +31,26 @@ my $usage = <<_EOUSAGE_;
 _EOUSAGE_
 ;
 
-#################
-# global vars   #
-#################
-our $file_list;
-our $reference;
-our $index_name;
-our $max_dist = 1;	# bwa allowed max edit distance 
-our $max_open = 1;	# bwa allowed max gap number
-our $max_extension = 1;	# bwa allowed max gap length, -1 means disallow long gap
-our $len_seed = 15;	# bwa seed length
-our $dist_seed = 1;	# bwa seed allowed max edit distance
-our $thread_num = 8;
+# pre set parameters
+my $file_list;
+my $reference;
+my $index_name;
+my $max_dist = 1;	# bwa allowed max edit distance 
+my $max_open = 1;	# bwa allowed max gap number
+my $max_extension = 1;	# bwa allowed max gap length, -1 means disallow long gap
+my $len_seed = 15;	# bwa seed length
+my $dist_seed = 1;	# bwa seed allowed max edit distance
+my $thread_num = 8;
  
 ################################
 # set folder and file path     #
 ################################
-our $WORKING_DIR	= cwd();				# current folder
-our $DATABASE_DIR 	= ${FindBin::RealBin}."/../databases";	# database folder
-our $BIN_DIR 		= ${FindBin::RealBin};			# script folder
-our $tf			= $WORKING_DIR."/temp";			# temp folder;
-##################
-# get input para #
-##################
+my $WORKING_DIR		= cwd();				# current folder
+my $DATABASE_DIR 	= ${FindBin::RealBin}."/../databases";	# database folder
+my $BIN_DIR 		= ${FindBin::RealBin};			# script folder
+my $tf			= $WORKING_DIR."/temp";			# temp folder;
+
+# get input parameters
 GetOptions( 
 	'file_list=s'	=> \$file_list,	# sample list
 	'reference=s'	=> \$reference,	# reference file (fasta format)
@@ -67,60 +68,63 @@ die $usage unless ($file_list && $reference);	# required parameters
 main: {
 
 	# creat bwa index for reference
-	process_cmd("$BIN_DIR/bwa index -p $reference -a bwtsw $reference 2> $tf/bwa.log") unless (-e "$reference.amb");
+	Util::process_cmd("$BIN_DIR/bwa index -p $reference -a bwtsw $reference 2> $tf/bwa.log") unless (-e "$reference.amb");
 
 	my $sample;
 	my $i=0;
         open(IN, "$file_list") || die $!;
         while (<IN>) {
-		$i=$i+1;
+		
 		chomp;
+		$i=$i+1;
 		$sample=$_;
-		print "#processing sample $i by $0: $sample\n";
+		#print "#processing sample $i by $0: $sample\n";
 
 		# command lines		
-		process_cmd("$BIN_DIR/bwa aln -n $max_dist -o $max_open -e $max_extension -i 0 -l $len_seed -k $dist_seed -t $thread_num $reference $sample 1> $sample.sai 2>$tf/bwa.log") unless (-s "$sample.sai");
-		process_cmd("$BIN_DIR/bwa samse -n 1 $reference $sample.sai $sample 1> $sample.sam 2>$tf/bwa.log") unless (-s "$sample.sam");
+		Util::process_cmd("$BIN_DIR/bwa aln -n $max_dist -o $max_open -e $max_extension -i 0 -l $len_seed -k $dist_seed -t $thread_num $reference $sample 1> $sample.sai 2>$tf/bwa.log") unless (-s "$sample.sai");
+		Util::process_cmd("$BIN_DIR/bwa samse -n 1 $reference $sample.sai $sample 1> $sample.sam 2>$tf/bwa.log") unless (-s "$sample.sam");
 
 		# generate unmapped reads
-		generate_unmapped_reads("$sample.sam", "$sample.unmapped");
+		my ($num_unmapped_reads, $ratio) = generate_unmapped_reads("$sample.sam", "$sample.unmapped");
+		Util::print_user_submessage("$num_unmapped_reads ($ratio) of reads can not be aligned to host reference");
 
 		# remove temp file for read alignment
 		system("rm $sample.sai");
 		system("rm $sample.sam");
 	}
         close(IN);
-	print "###############################\n";
-	print "All the input files have been processed by $0\n";
 }
 
 # subroutine
-sub process_cmd {
-	my ($cmd) = @_;	
-	print "CMD: $cmd\n";
-	my $ret = system($cmd);	
-	if ($ret) {
-		print "Error, cmd: $cmd died with ret $ret";
-	}
-	return($ret);
-}
-
 sub generate_unmapped_reads
 {
 	my ($input_SAM, $output_reads) = @_;
+
+	my %mapped_reads;
+	my ($num_unmapped_reads, $ratio) = (0, 0);
 
 	my $in  = IO::File->new($input_SAM) || die $!;
 	my $out = IO::File->new(">".$output_reads) || die $!;
 	while(<$in>)
 	{
 		chomp;
-		if ($_ =~ m/^@/) { next; }
+		next if $_ =~ m/^@/;
 		my @a = split(/\t/, $_);
+
+		
 		if ( $a[1] == 4 ) { 
 		       print $out "\@$a[0]\n$a[9]\n+\n$a[10]\n";
+		       $num_unmapped_reads++;
+		} else {
+			$mapped_reads{$a[0]} = 1;
 		}
 	}
 	$in->close;
 	$out->close;
+
+	$ratio = ( $num_unmapped_reads / ($num_unmapped_reads + scalar(keys %mapped_reads))) * 100;
+	$ratio = sprintf("%.2f", $ratio);
+	$ratio = $ratio."%";
+	return ($num_unmapped_reads, $ratio);
 }
 

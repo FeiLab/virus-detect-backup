@@ -1,8 +1,11 @@
 #!/usr/bin/perl
+
 use strict;
 use warnings;
 use Getopt::Long;
 use FindBin;
+use lib "$FindBin::RealBin/PerlLib";
+use Util;
 use Bio::SeqIO;
 use Cwd;
 
@@ -91,7 +94,7 @@ while(<IN1>){
 	$j=$j+1;
 	chomp;
 	$sample = $_;
-	print "#processing sample $j by $0: $sample\n";
+	#print "#processing sample $j by $0: $sample\n";
 	$contig_file = $sample.".".$input_suffix;
 
 	# get aligned files size, do not remove redundancy if file size is 0
@@ -100,21 +103,26 @@ while(<IN1>){
 
 	# if file has sequence, move it to temp folder to remove redundancy
 	# 1. remove simple repeate sequence using mask
-	system ("$BIN_DIR/dust $sample.$input_suffix 1> $sample.masked 2> $tf/dust.log");
-	system ("$BIN_DIR/trim_XNseq1.pl $sample.masked $sample.$input_suffix 0.8 40 > $sample.$input_suffix.1");
-	system ("rm $sample.masked");
+	Util::process_cmd("$BIN_DIR/dust $sample.$input_suffix 1> $sample.masked 2> $tf/dust.log");
+	Util::process_cmd("$BIN_DIR/trim_XNseq1.pl $sample.masked $sample.$input_suffix 0.8 40 > $sample.$input_suffix.1");
+	Util::process_cmd("rm $sample.masked");
 
 	my ($before_contig_num, $after_contig_num, $i);
 	$i = 1;								# get the number of contig file, default is 1
 	$before_contig_num = `grep -c \'>\' $sample.$input_suffix.$i`;	# get the seq number before remove redundancy
 	$after_contig_num  = 0;						# this is seq number after remove redundancy	
 	
+	if( $before_contig_num == 0 ){                          # if file size = 0, create blank file, and exit the loop
+                Util::process_cmd("touch $sample.$input_suffix");
+                next;
+        }
+
 	# if the new contig number != old contig number, continue remove redundancy
 	while( $after_contig_num != $before_contig_num )
 	{
 		# the default output is the input_inset; 
-		process_cmd ("$BIN_DIR/removeRedundancy.pl --input $sample.$input_suffix.$i --min_overlap $min_overlap --max_end_clip $max_end_clip --cpu_num $cpu_num --mis_penalty $mis_penalty --gap_cost $gap_cost --gap_extension $gap_extension");
-		process_cmd("rm $sample.$input_suffix.$i");# rm old file
+		Util::process_cmd ("$BIN_DIR/removeRedundancy.pl --input $sample.$input_suffix.$i --min_overlap $min_overlap --max_end_clip $max_end_clip --cpu_num $cpu_num --mis_penalty $mis_penalty --gap_cost $gap_cost --gap_extension $gap_extension");
+		Util::process_cmd("rm $sample.$input_suffix.$i");# rm old file
 		my $remove_redundancy_result = "$sample.$input_suffix.$i"."_inset";
 
 		$i++;
@@ -122,7 +130,15 @@ while(<IN1>){
 		# renew contig_num2
 		$after_contig_num =  `grep -c \'>\' $remove_redundancy_result`; # get seq number of new contig
 		chomp($after_contig_num);
-              	system ("mv $remove_redundancy_result $sample.$input_suffix.$i");	
+              	Util::process_cmd("mv $remove_redundancy_result $sample.$input_suffix.$i");	
+	}
+
+	if ($after_contig_num > 1) {
+		Util::print_user_submessage("$after_contig_num of unique contigs were generated");
+	} elsif ($after_contig_num == 1) {
+		Util::print_user_submessage("$after_contig_num of unique contig was generated");
+	} elsif ($after_contig_num == 0) {
+		Util::print_user_submessage("None of unique contig was generated, should be error!");
 	}
 
 	# finish remove redundancy, next for base correction
@@ -131,21 +147,21 @@ while(<IN1>){
 
 	#aligment -> sam -> bam -> sorted bam -> pileup
 	my $format = "-q"; if ($file_type eq "fasta") {$format="-f"};
-	process_cmd("$BIN_DIR/bowtie-build --quiet -f $sample_reference $sample") unless (-e "$sample.1.amb");
-	process_cmd("$BIN_DIR/samtools faidx $sample_reference") unless (-e "$sample_reference.fai");
-	process_cmd("$BIN_DIR/bowtie --quiet $sample -v 1 -p $cpu_num $format $sample -S -a --best $sample.sam") unless (-s "$sample.sam");
-	process_cmd("$BIN_DIR/samtools view -bt $sample_reference.fai $sample.sam > $sample.bam") unless (-s "$sample.bam");
-	process_cmd("$BIN_DIR/samtools sort $sample.bam $sample.sorted") unless (-s "$sample.sorted.bam");
-	process_cmd("$BIN_DIR/samtools mpileup -f $sample_reference $sample.sorted.bam > $sample.pileup") unless (-s "$sample.pileup");	
+	Util::process_cmd("$BIN_DIR/bowtie-build --quiet -f $sample_reference $sample") unless (-e "$sample.1.amb");
+	Util::process_cmd("$BIN_DIR/samtools faidx $sample_reference 2> $tf/samtools.log") unless (-e "$sample_reference.fai");
+	Util::process_cmd("$BIN_DIR/bowtie --quiet $sample -v 1 -p $cpu_num $format $sample -S -a --best $sample.sam") unless (-s "$sample.sam");
+	Util::process_cmd("$BIN_DIR/samtools view -bt $sample_reference.fai $sample.sam > $sample.bam 2> $tf/samtools.log") unless (-s "$sample.bam");
+	Util::process_cmd("$BIN_DIR/samtools sort $sample.bam $sample.sorted 2> $tf/samtools.log") unless (-s "$sample.sorted.bam");
+	Util::process_cmd("$BIN_DIR/samtools mpileup -f $sample_reference $sample.sorted.bam > $sample.pileup 2> $tf/samtools.log") unless (-s "$sample.pileup");	
 
 	$file_size = -s "$sample.pileup";		# get file size
 	if( $file_size == 0 ){				# if file size = 0, create blank file, and exit the loop
-		system ("touch $sample.$input_suffix");
+		Util::process_cmd("touch $sample.$input_suffix");
 		next;
 	}
 
 	$i++;
-	process_cmd("java -cp $BIN_DIR extractConsensus $sample 1 40 $i");
+	Util::process_cmd("java -cp $BIN_DIR extractConsensus $sample 1 40 $i");
 	renameFasta("$sample.contigs$i.fa", "$sample.$input_suffix", $contig_prefix);
 
 	# remove temp files
@@ -159,26 +175,16 @@ while(<IN1>){
 	system("rm $sample.contigs$i.fa");	
 }
 close(IN1);
-print "###############################\n";
-print "All the samples have been processed by $0\n";
 
 #system("rm *.log");
 
 #################
 # subroutine	#
 #################
-sub process_cmd {
-	my ($cmd) = @_;	
-	print "CMD: $cmd\n";
-	my $ret = system($cmd);
-	if ($ret) {
-		print "Error, cmd: $cmd died with ret $ret";
-	}
-	return($ret);
-}
-
 =head2
+
  renameFasta: rename the fasta file with spefic prefix
+
 =cut
 sub renameFasta
 {

@@ -1,5 +1,17 @@
 #!/usr/bin/perl -w 
 
+=head1
+
+ hit_filter2: this script will filter the hit record (virus reference) accroding contig supporting
+
+ method:
+ The hit record will be treated as redundancy (not print) when meet below condtions at same time 
+ 1. the nubmer of diff contigs should be < 25%
+ 2. length of diff contigs < 100bp
+ 3. cover of different contigs < 50%
+
+=cut
+
 use strict; 
 use IO::File; 
 use FindBin;
@@ -29,9 +41,9 @@ _EOUSAGE_
 # set vars  	#
 #################	
 my ($input1, $input2, $diff_ratio, $diff_contig_cover, $diff_contig_length, $output);            
-$diff_ratio = 0.25;
-$diff_contig_cover = 0.5;
-$diff_contig_length = 100;
+$diff_ratio 		= 0.25;
+$diff_contig_cover	= 0.5;
+$diff_contig_length	= 100;
 
 ################################
 # set folder and file path     #
@@ -103,6 +115,7 @@ for my $tr (@all_data) { print $tr->[2]."\n"; }	# debug for sorted data
 # @restset : lines of redundancy contigs 
 my @inset;
 my @restset = ();
+my @allset = ();
 my $contig_count = 1; 
 
 foreach my $tr (@all_data) 
@@ -112,23 +125,29 @@ foreach my $tr (@all_data)
 		push(@inset, $tr->[2]);
 	}else{
 		my @aa = split(/\t/, $tr->[2]);
+		# format
+		# ref_ID \t length \t HSP_len \t Coverage \t Contigs1,...,ContigsN \n;
 
 		# get return string for non-redundancy and redundancy status
 		# return_string: n -- non-redundancy 
 		# return_string: r -- redundancy
 		# put non-redundancy and redundancy data to array inset, restset
+
 		my $return_string = ifRedundant(\@inset, \$aa[4], $aa[0], $aa[1]);
 		if ($return_string eq "n") {	
 			push(@inset, $tr->[2]); 
-		}else{
+		} else {
 			push(@restset, $tr->[2]); 
 		}
+		push(@allset, $tr->[2]);
 	}
 }
 
 # output all non-redundancy data
 open(OUT1, ">$output") || die "Can not open output file $output $!";
 foreach my $tr (@inset) { print OUT1 $tr."\n"; }
+#foreach my $tr (@restset) { print OUT1 $tr."\n"; }
+#foreach my $tr (@allset) { print OUT1 $tr."\n"; }
 close(OUT1);
 
 =head2 output the redundancy data for debug
@@ -140,6 +159,11 @@ close(OUT2);
 #################
 # subroutine	#
 #################
+=head2
+
+ ifRedundant: check if the dataset is redundant
+
+=cut
 sub ifRedundant 
 {
 	my ($inset, $query, $hit_name, $hit_length) = @_; 
@@ -148,7 +172,8 @@ sub ifRedundant
 	my $total_contigs = scalar(@query_contigs);
 	my $ratio;
 
-	foreach my $tr (@$inset) 
+	# scan previous stored record to check redundancy
+	foreach my $tr ( @$inset ) 
 	{
 		# put contigs to hash for non-redundancy data 
 		my @aa = split(/\t/, $tr);

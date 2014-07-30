@@ -1,29 +1,36 @@
 #!/usr/bin/perl
+
 # this script is used for parse blastn result with fast speed than Bio::SearchIO
 # input file is blast output, named with paired as suffix
 # output file is tab delimit txt, named with table
-# bioperl的定义：$hsp->start('hit')总是不大于$hsp->end('hit')，这与blast输出的table格式不同
-# 这个程序保持了bioperl的格式，必须加一列strand信息
+
+# bioperl: $hsp->start('hit') always smaller than $hsp->end('hit'), this is different with blast table output
+# This script use the bioperl format as output, it will have addtional strand info
+
+# use strict;
+# use warnings;
 
 if (@ARGV < 2)
 {
-  print "usage: blast_parse_table22.pl input output\n";
-  exit(0);
+	print "usage: blast_parse_table22.pl input output\n";
+	exit(0);
 }
 
 our $input = $ARGV[0];
 our $output = $ARGV[1];
 
 my ($query_name, $query_length, $hit_name, $hit_length, $hsp_length, $identity, $evalue, $score, $strand, $query_start, $query_end, $hit_start, $hit_end, $query_to_end, $hit_to_end);
-my ($identity2, $aligned_query,$aligned_hit,$aligned_string); #增加4列信息
+my ($identity2, $aligned_query, $aligned_hit, $aligned_string); # will ouput four additional col
+
 my (%hsp, $hsp_count); 
 %hsp = ();$hsp_count=0; 
+
 my $query_sequenc; 
 my $subject_sequenc; 	
 my $is_hsp = 1;
 
-open(IN, "$input");
-open(OUT, ">$output");
+open(IN, "$input") || die $!;
+open(OUT, ">$output") || die $!;
 #print OUT "query_name\tquery_length\thit_name\thit_length\thsp_length\tidentity\tevalue\tscore\tstrand\tquery_start\tquery_end\thit_start\thit_end\tidentity2\taligned_query\taligned_hit\taligned_string;
 while (<IN>) 
 {

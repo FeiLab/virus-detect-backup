@@ -1,10 +1,14 @@
 #!/usr/bin/env perl
+
 use strict;
 use warnings;
 use Getopt::Long qw(:config no_ignore_case bundling);
-use Bio::SeqIO;
 use Cwd;
 use FindBin;
+use lib "$FindBin::RealBin/PerlLib";
+use Util;
+use IO::File;
+use Bio::SeqIO;
 
 my $usage = <<_EOUSAGE_;
 
@@ -62,21 +66,19 @@ main: {
 		$i=$i+1;
 		chomp;
 		my @a = split(/\t/, $_);				# array: sample, Hash_len, Coverage_cutoff
-		print "#processing sample $i: $a[0]\n";
 		runVelvet($a[0],$a[1],$a[2]);				# assemblied reads into contigs using Velvet
 
 		# move the assemblied contigs to ouput file
 		$resultDir = $a[0]."_".$a[1]."_".$a[2];
 		my $contigName = $a[0].".".$output_suffix;		# output file name
-		system("mv $resultDir/contigs.fa $contigName");		# move assemblied contigs to output file
+		Util::process_cmd("mv $resultDir/contigs.fa $contigName");# move assemblied contigs to output file
 		#system("rm -r $resultDir");				# remove assemblied output folder
 
 		my $count = `grep -c \'>\' $contigName `;		#  stat the number of contigs
-		print $a[0]."\tAssemblied Contig No.:".$count;
+		chomp($count);
+		Util::print_user_submessage("Assemblied Contig No: ".$count);
 	}
 	close(IN);
-	print "###############################\n";
-	print "All the samples have been processed by $0\n";
 }
 
 # subroutine
@@ -86,16 +88,7 @@ sub runVelvet {
 	my $file;
 	if ($input_suffix)	{ $file = "$sample.$input_suffix"; }
 	else			{ $file = $sample; }
-	process_cmd($velvet_dir."/velveth $outputDir $hash_length -$file_type $file > $tf/velvet.log");
-	process_cmd($velvet_dir."/velvetg $outputDir -cov_cutoff $cov_cutoff -min_contig_lgth 30 > $tf/velvet.log");	
+	Util::process_cmd($velvet_dir."/velveth $outputDir $hash_length -$file_type $file > $tf/velvet.log");
+	Util::process_cmd($velvet_dir."/velvetg $outputDir -cov_cutoff $cov_cutoff -min_contig_lgth 30 > $tf/velvet.log");	
 }
 
-sub process_cmd {
-	my ($cmd) = @_;	
-	print "CMD: $cmd\n";
-	my $ret = system($cmd);	
-	if ($ret) {
-		print "Error, cmd: $cmd died with ret $ret";
-	}
-	return($ret);
-}

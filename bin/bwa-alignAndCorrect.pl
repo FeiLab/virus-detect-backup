@@ -1,9 +1,12 @@
 #!/usr/bin/env perl
+
 use strict;
 use warnings;
 use Getopt::Long;
 use Cwd;
 use FindBin;
+use lib "$FindBin::RealBin/PerlLib";
+use Util;
 use File::Basename;
 use IO::File;
 use Bio::SeqIO;
@@ -80,8 +83,8 @@ die $usage unless ($file_list && $reference && $coverage && $output_suffix);	# r
 main: {
 
     # create bwa and fasta index file for reference file (plant virus)   
-    process_cmd("$BIN_DIR/bwa index -p $reference -a bwtsw $reference 2> $tf/bwa.log") unless (-e "$reference.amb"); 
-    process_cmd("$BIN_DIR/samtools faidx $reference") unless (-e "$reference.fai");
+    Util::process_cmd("$BIN_DIR/bwa index -p $reference -a bwtsw $reference 2> $tf/bwa.log") unless (-e "$reference.amb"); 
+    Util::process_cmd("$BIN_DIR/samtools faidx $reference") unless (-e "$reference.fai");
     
     # parse samples in file list 
     my ($i, $sample, $output_file);
@@ -93,11 +96,11 @@ main: {
 		$sample = $_;
 		$output_file = $sample.".".$output_suffix;
 		die "Error, file $sample does not exist\n" unless -s $sample;		
-		print "# processing the $i sample -- $sample using $0\n";
+		#print "# processing the $i sample -- $sample using $0\n";
 
 		#aligment -> sam -> bam -> sorted bam -> pileup
-		process_cmd("$BIN_DIR/bwa aln -n $max_dist -o $max_open -e $max_extension -i 0 -l $len_seed -k $dist_seed -t $thread_num $reference $sample 1> $sample.sai 2>> $tf/bwa.log") unless (-s "$sample.sai");
-		process_cmd("$BIN_DIR/bwa samse -n 10000 -s $reference $sample.sai $sample 1> $sample.sam 2>> $tf/bwa.log") unless (-s "$sample.sam");
+		Util::process_cmd("$BIN_DIR/bwa aln -n $max_dist -o $max_open -e $max_extension -i 0 -l $len_seed -k $dist_seed -t $thread_num $reference $sample 1> $sample.sai 2>> $tf/bwa.log") unless (-s "$sample.sai");
+		Util::process_cmd("$BIN_DIR/bwa samse -n 10000 -s $reference $sample.sai $sample 1> $sample.sam 2>> $tf/bwa.log") unless (-s "$sample.sam");
 
 		# filter out unmapped reads
 		# filter out 2nd hits, and only keep the best hits of reads alignment to reference		
@@ -105,9 +108,9 @@ main: {
 		filter_SAM_2nd_hits($sample.".sam");
 
 		# sort sam to bam and generate pileup file
-		process_cmd("$BIN_DIR/samtools view -bt $reference.fai $sample.sam > $sample.bam") unless (-s "$sample.bam");
-		process_cmd("$BIN_DIR/samtools sort $sample.bam $sample.sorted") unless (-s "$sample.sorted.bam");
-		process_cmd("$BIN_DIR/samtools mpileup -f $reference $sample.sorted.bam > $sample.pre.pileup") unless (-s "$sample.pre.pileup");
+		Util::process_cmd("$BIN_DIR/samtools view -bt $reference.fai $sample.sam > $sample.bam 2> $tf/samtools.log") unless (-s "$sample.bam");
+		Util::process_cmd("$BIN_DIR/samtools sort $sample.bam $sample.sorted 2> $tf/samtools.log") unless (-s "$sample.sorted.bam");
+		Util::process_cmd("$BIN_DIR/samtools mpileup -f $reference $sample.sorted.bam > $sample.pre.pileup 2> $tf/samtools.log") unless (-s "$sample.pre.pileup");
 
 		# if coverage of any reference is lower than ratio cutoff (default : 0.3 ), remove the alignment for this reference
 		my $depth_cutoff;
@@ -119,58 +122,48 @@ main: {
 		if($file_size != 0)
 		{
 			# get continous fragment for depth>=1 and length>=40, output file name has '1'
-			process_cmd("java -cp $BIN_DIR extractConsensus $sample 0 40 1");			
+			Util::process_cmd("java -cp $BIN_DIR extractConsensus $sample 0 40 1");			
 			my $result_contigs = $sample.".contigs1.fa";			# this is a corrected sequences
-			my $count = `grep \'>\' $result_contigs | wc -l`;
-			print "@".$sample."\t".$count;					# get seq number, this number maybe 0 after filter by JAVA
+			my $count = `grep \'>\' $result_contigs | wc -l`; chomp($count);# get seq number
+			Util::print_user_submessage("$count of contigs were retrieved from aligned reads");
+
 			if($count!=0){ 							# if seq number > 0, move seq file to align folder
 				#system("$BIN_DIR/renameFasta.pl --inputfile $result_contigs --outputfile $tsample.contigs2.fa --prefix ALIGNED");# the seq name should be formatted
 				renameFasta($result_contigs, "$sample.contigs2.fa", "ALIGNED");
-				system("mv $sample.contigs2.fa $output_file");	# move the seq file to folder
-				system("rm $result_contigs");
+				Util::process_cmd("mv $sample.contigs2.fa $output_file");# move the seq file to folder
+				Util::process_cmd("rm $result_contigs");
 			}
 			else
-			{								# if seq number = 0, move file to align folder
-				system("mv $result_contigs $output_file");	
+			{
+				Util::process_cmd("mv $result_contigs $output_file");	# if seq number = 0, move file to align folder
 			}
 		}	
-		else{									# file size is 0 or sample.pileup is not exist
-			print "@".$sample."\t0\n"; 
-			system("touch $output_file");	
-		}			
+		else{	
+			Util::print_user_submessage("None of contigs were retrieved from aligned reads");# file size is 0 or sample.pileup is not exist
+			Util::process_cmd("touch $output_file");
+		}
+		
 		system("rm $sample.sai");
 		system("rm $sample.sam");
 		system("rm $sample.bam");
 		system("rm $sample.sorted.bam");
 		system("rm $sample.pre.pileup");
 		system("rm $sample.pileup");	
-		system("rm $tf/bwa.log");
+		system("rm $tf/bwa.log");		
 	}
 	close(IN);
-	print "###############################\n";
-	print "All the input files have been processed by $0\n";
 }
 
 #################
 # subroutine    #
 #################
-sub process_cmd 
-{
-	my ($cmd) = @_;	
-	print "CMD: $cmd\n";
-	my $ret = system($cmd);	
-	if ($ret) {
-		print "Error, cmd: $cmd died with ret $ret";
-	}
-	return($ret);
-}
 
 sub pileup_filter 
 {
 	my ($inputfile, $seq_info, $ratio, $outputfile) = @_;
 
 	# get seq length 
-	open(IN1, "$seq_info" );
+	open(IN1, "$seq_info" ) || die $!;
 	my %hash;
 	my @a;
 	my $id;
@@ -182,8 +175,8 @@ sub pileup_filter
 	}
 	close IN1;
 
-	open(IN2, "$inputfile" );
-	open(OUT, ">$outputfile" );
+	open(IN2, "$inputfile" ) || die $!;
+	open(OUT, ">$outputfile" ) || die $!;
 
 	my $pre_reference="a";
 	my $current_reference;
@@ -219,7 +212,8 @@ sub pileup_filter
 	    push @data, $line;#每次循环都要存pileup文件的一行
 	    $pre_reference=$current_reference;
 	}
-	print "the average depth of $inputfile is \t", 1.0*$totalDepth/$totalPositions, "\n";
+	
+	#print "the average depth of $inputfile is \t", 1.0*$totalDepth/$totalPositions, "\n";
 
 	#别忘了处理剩下的部分内容
 	$len_threshold=$hash{$current_reference}*$ratio;
@@ -255,11 +249,14 @@ sub renameFasta
 
 
 =head2
- filter_SAM_unmapped: filter out unmapped hit
+ 
+ filter_SAM_unmapped: filter out unmapped hit base on cigar (cigar == 4)
+
 =cut
 sub filter_SAM_unmapped
 {
 	my $input_SAM = shift;
+	
 	my $temp_SAM = $input_SAM.".temp";
 	my ($total_count, $filtered_count) = (0, 0);
 
@@ -276,12 +273,14 @@ sub filter_SAM_unmapped
 	}
 	$in->close;
 	$out->close;
-	process_cmd("mv $temp_SAM $input_SAM");
-	print STDERR "This program filtered $filtered_count out of $total_count reads (" . sprintf("%.2f", $filtered_count / $total_count * 100) . ") as unmapped reads, only for BWA\n";
+	Util::process_cmd("mv $temp_SAM $input_SAM");
+	#print STDERR "This program filtered $filtered_count out of $total_count reads (" . sprintf("%.2f", $filtered_count / $total_count * 100) . ") as unmapped reads, only for BWA\n";
 }
 
 =head2
+
  filter_SAM_2nd_hits: filter out 2nd hits, only kept 1st hits alignment for each query id
+
 =cut
 sub filter_SAM_2nd_hits
 {
@@ -349,9 +348,9 @@ sub filter_SAM_2nd_hits
 
 	$out->close;
 
-	process_cmd("mv $temp_SAM $input_SAM");
+	Util::process_cmd("mv $temp_SAM $input_SAM");
 	my $filtered_count = $total_count - $kept_align;
-	print STDERR "This program filtered $filtered_count out of $total_count reads (" . sprintf("%.2f", $filtered_count / $total_count * 100) . ") as 2ndhits reads, only for BWA\n";
+	#print STDERR "This program filtered $filtered_count out of $total_count reads (" . sprintf("%.2f", $filtered_count / $total_count * 100) . ") as 2ndhits reads, only for BWA\n";
 }
 
 

@@ -1,9 +1,12 @@
 #!/usr/bin/env perl
+
 use strict;
 use warnings;
 use Getopt::Long qw(:config no_ignore_case bundling);
 use Bio::SeqIO;
 use FindBin;
+use lib "$FindBin::RealBin/PerlLib";
+use Util;
 use Cwd;
 
 my $usage = <<_EOUSAGE_;
@@ -71,13 +74,13 @@ main: {
     my $opt_coverage=$coverage_start;				# the optimization coverage when objective is max
     my $opt_avgLen=0;                				# the avg Length when objective is max
     open(IN, "$file_list");
-    open(OUT1, ">$tf/optimization.log") or die "$!\n"; 		# save optimization information
-    open(OUT2, ">$tf/optimization.result") || die "$!\n";		# save final optimization result
+    open(OUT1, ">$tf/optimization.log") || die $!; 		# save optimization information
+    open(OUT2, ">$tf/optimization.result") || die $!;		# save final optimization result
     while (<IN>) {
 		$sampleNum = $sampleNum+1;
 		chomp;
 		$sample = $_;		
-		print "#processing sample $sampleNum: $sample\n";		
+		#print "#processing sample $sampleNum: $sample\n";		
 		
 		# reset parameters
 		$max_objective = 0;
@@ -102,7 +105,7 @@ main: {
 					$opt_avgLen=$aa->{avgLen};
 				}
 			}
-			process_cmd("rm $current_folder -r");		
+			Util::process_cmd("rm $current_folder -r");		
 		} 
 		# optimize coverage using fixed k-mer length
 		for(my $j=$coverage_start+2; $j<=$coverage_end; $j=$j+1) {  # start from 7, 注意这里从7开始，因为5上面都算过了
@@ -122,15 +125,13 @@ main: {
 					$opt_avgLen=$aa->{avgLen};
 				}
 			}
-			process_cmd("rm $current_folder -r");
+			Util::process_cmd("rm $current_folder -r");
 		}       
 		print OUT2 $sample."\t".$opt_hash_length."\t".$opt_coverage."\t".$max_objective."\t".$opt_avgLen."\n";
 	}
 	close(IN);
 	close(OUT1);
 	close(OUT2);
-	print "###############################\n";
-    	print "All the samples have been processed by $0\n";
 }
 
 # subroutine
@@ -142,18 +143,10 @@ sub runVelvet {
 	if ($input_suffix)	{ $file = "$sample1.$input_suffix"; } 
 	else 			{ $file = $sample1; }
 
-	process_cmd($velvet_dir."/velveth $outputDir $hash_length -$file_type $file >> $tf/velvet.log");
-	process_cmd($velvet_dir."/velvetg $outputDir -cov_cutoff $cov_cutoff -min_contig_lgth 30 >> $tf/velvet.log");	
+	Util::process_cmd($velvet_dir."/velveth $outputDir $hash_length -$file_type $file >> $tf/velvet.log");
+	Util::process_cmd($velvet_dir."/velvetg $outputDir -cov_cutoff $cov_cutoff -min_contig_lgth 30 >> $tf/velvet.log");	
 }
-sub process_cmd {
-	my ($cmd) = @_;	
-	print "CMD: $cmd\n";
-	my $ret = system($cmd);	
-	if ($ret) {
-		print "Error, cmd: $cmd died with ret $ret";
-	}
-	return($ret);
-}
+
 sub contigStats {
 	
 	my $file = shift;

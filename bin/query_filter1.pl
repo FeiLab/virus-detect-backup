@@ -1,7 +1,5 @@
 #!/usr/bin/perl -w 
 
-use strict; 
-
 # 来自blast_parse_table2.pl程序的输出
 # query_name	query_length	hit_name	hit_length	hsp_length	identity	evalue	score	strand	query_start	query_end	hit_start	hit_end
 # 其中0、1、9、10是必须的
@@ -11,17 +9,19 @@ use strict;
 # 剩下的序列的名称输出到ouput2
 # 如果hit都是病毒，可以用这个ratio来判断所得到contig是不是病毒
 
+use strict; 
+
 if (@ARGV < 2)
 {
   print "usage: query_filter1.pl inputfile1 inputfile2 output1 identity min_ratio > output2\n";
   exit(0);
 }
 
-our $input1 = $ARGV[0]; #
-our $input2 = $ARGV[1]; #
-our $output = $ARGV[2]; #这是要得到的输出文件，包括了所有提取的序列
-our $identity = $ARGV[3];#需要累积的hsp的identity最小值
-our $min_ratio = $ARGV[4];#一个query累计被covered的最小比例
+my $input1 = $ARGV[0]; #
+my $input2 = $ARGV[1]; #
+my $output = $ARGV[2]; #这是要得到的输出文件，包括了所有提取的序列
+my $identity = $ARGV[3];#需要累积的hsp的identity最小值
+my $min_ratio = $ARGV[4];#一个query累计被covered的最小比例
 
 open(IN1, "$input1");
 my %blk; 
