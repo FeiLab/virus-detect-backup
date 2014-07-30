@@ -3,12 +3,14 @@ use strict;
 use warnings;
 use Getopt::Long;
 use Cwd;
+use FindBin;
 use File::Basename;
+
 my $usage = <<_EOUSAGE_;
 
 #########################################################################################
 # bwa-alignAndCorrect.pl --file_list <FILE> --reference <FILE> --coverage <Float> 
-#                 --max_dist[INT] --max_open [INT] --max_extension [INT] --len_seed [INT] --dist_seed [INT] --thread_num [INT]
+#                 		 --max_dist[INT] --max_open [INT] --max_extension [INT] --len_seed [INT] --dist_seed [INT] --thread_num [INT]
 # 
 # Required(3):
 #  --file_list A txt file containing a list of input file names without any suffix
@@ -26,94 +28,98 @@ my $usage = <<_EOUSAGE_;
 
 _EOUSAGE_
 
-	;
+;
 #################
-##   全局变量  ##
+#  global vars  #
 #################
-our $file_list;#包括所有待处理的样本的文本文件名称（无后缀）
-our $reference;#包括全部参考序列的文件名称（FASTA格式）
-our $index_name;#参考序列的索引名称
-our $coverage;  #每条参考序列如果被reads覆盖的部分占全长比例的阈值
-our $max_dist = 1; # 
-our $max_open = 1; #
-our $max_extension = 1; # 
-our $len_seed = 15; #
-our $dist_seed = 1; # 
-our $thread_num = 8; # 
+our $file_list;			# list of sample name
+our $reference;			# reference sequence, fasta format
+our $index_name;		# index name for reference
+our $coverage;  		# cutoff of mapping reads / reference
+our $max_dist = 1; 		# BWA allowed max distance 
+our $max_open = 1; 		# BWA allowed max gap opens
+our $max_extension = 1; # BWA allowed max gap extension
+our $len_seed = 15; 	# length of seed
+our $dist_seed = 1; 	# BWA allowed seed max distance
+our $thread_num = 8; 	# thread number
 
 ################################
-##   设置所有目录和文件的路径 ##
+# set folder and file path     #
 ################################
-our $WORKING_DIR=cwd();#工作目录就是当前目录
-our $DATABASE_DIR=$WORKING_DIR."/databases";#所有数据库文件所在的目录
-our $BIN_DIR=$WORKING_DIR."/bin";#所有可执行文件所在的目录
-our $seq_info= $DATABASE_DIR."/vrl_genbank.info";
+our $WORKING_DIR	= cwd();								# current folder
+our $DATABASE_DIR	= ${FindBin::RealBin}."/../databases";	# database folder
+our $BIN_DIR		= ${FindBin::RealBin};					# programs folder
+our $seq_info		= $DATABASE_DIR."/vrl_genbank.info";	# genbank info
 
-##################
-## 程序参数处理 ##
-##################
-&GetOptions( 'file_list=s' => \$file_list,
-	'reference=s' => \$reference,
-	'coverage=f' => \$coverage,
-	'max_dist=i' => \$max_dist,
-	'max_open=i' => \$max_open,
-	'max_extension=i' => \$max_extension,
-	'len_seed=i' => \$len_seed,
-	'dist_seed=i' => \$dist_seed,			 
-	'thread_num=i' => \$thread_num 
-			 );
+###################
+# get input paras #
+###################
+GetOptions( 
+	'file_list=s'		=> \$file_list,
+	'reference=s' 		=> \$reference,
+	'coverage=f' 		=> \$coverage,
+	'max_dist=i' 		=> \$max_dist,
+	'max_open=i' 		=> \$max_open,
+	'max_extension=i' 	=> \$max_extension,
+	'len_seed=i' 		=> \$len_seed,
+	'dist_seed=i' 		=> \$dist_seed,			 
+	'thread_num=i' 		=> \$thread_num 
+);
 
-unless ($file_list&&$reference&&$coverage) {#这3个参数必须通过输入得到
-	die $usage;}
-$index_name = basename($reference);#去掉目录名称，只保留文件名称
-$index_name =~ s/\.\S*$//;#去掉文件后缀名
+die $usage unless ($file_list && $reference && $coverage);	# required parameters
+$index_name = basename($reference);							# remove folder name
+#$index_name =~ s/\.\S*$//;									# remove suffix
 
 #################
-##  主程序开始 ##
+# main          #
 #################
 main: {
-    #调用bwa为参考序列建立索引,用于下一步的alignment
-    &process_cmd("$BIN_DIR/bwa index -p $DATABASE_DIR/$index_name -a bwtsw $reference 2> bwa.log") unless (-e "$DATABASE_DIR/$index_name.amb");#建立索引文件，aligment用，运行完程序也不删除   
-    &process_cmd("$BIN_DIR/samtools faidx $reference") unless (-e "$reference.fai");#建立索引文件，后面bam格式转换用，运行完程序也不删除   
-    my $sample;
+    # create bwa and fasta index file for reference file (plant virus)   
+    process_cmd("$BIN_DIR/bwa index -p $DATABASE_DIR/$index_name -a bwtsw $reference 2> bwa.log") unless (-e "$DATABASE_DIR/$index_name.amb"); 
+    process_cmd("$BIN_DIR/samtools faidx $reference") unless (-e "$reference.fai");
+    
+	# parse samples in file list 
+	my $sample;
     my $i=0;
-    open(IN, "$file_list");
-
+    open(IN, "$file_list") || die $!;
     while (<IN>) {
 		$i=$i+1;
 		chomp;
-		$sample=$_; #每次循环读入一行，后续代码都是处理该样本文件（名称无后缀）。
+		$sample=$_;
+		die "Error, file $sample does not exist\n" unless -s $sample;		
 		print "#processing sample $i by $0: $sample\n";
 		
 		#aligment -> sam -> bam -> sorted bam -> pileup
-		&process_cmd("$BIN_DIR/bwa aln -n $max_dist -o $max_open -e $max_extension -i 0 -l $len_seed -k $dist_seed -t $thread_num $DATABASE_DIR/$index_name $sample.clean 1> $sample.sai 2>> bwa.log") unless (-s "$sample.sai");
-		&process_cmd("$BIN_DIR/bwa samse -n 10000 -s $DATABASE_DIR/$index_name $sample.sai $sample.clean 1> $sample.pre.sam 2>> bwa.log") unless (-s "$sample.pre.sam");			
-		&process_cmd("$BIN_DIR/SAM_filter_out_unmapped_reads.pl $sample.pre.sam > $sample.sam1") unless (-s "$sample.sam1");
-		&process_cmd("$BIN_DIR/samFilter.pl $sample.sam1 > $sample.sam") unless (-s "$sample.sam");#只保留最好一个级别的的hits
-		&process_cmd("$BIN_DIR/samtools view -bt $reference.fai $sample.sam > $sample.bam") unless (-s "$sample.bam");
-		&process_cmd("$BIN_DIR/samtools sort $sample.bam $sample.sorted") unless (-s "$sample.sorted.bam");
-		&process_cmd("$BIN_DIR/samtools mpileup -f $reference $sample.sorted.bam > $sample.pre.pileup") unless (-s "$sample.pre.pileup");
+		process_cmd("$BIN_DIR/bwa aln -n $max_dist -o $max_open -e $max_extension -i 0 -l $len_seed -k $dist_seed -t $thread_num $DATABASE_DIR/$index_name $sample 1> $sample.sai 2>> bwa.log") unless (-s "$sample.sai");
+		process_cmd("$BIN_DIR/bwa samse -n 10000 -s $DATABASE_DIR/$index_name $sample.sai $sample 1> $sample.pre.sam 2>> bwa.log") unless (-s "$sample.pre.sam");			
+		process_cmd("$BIN_DIR/SAM_filter_out_unmapped_reads.pl $sample.pre.sam > $sample.sam1") unless (-s "$sample.sam1");
+		process_cmd("$BIN_DIR/samFilter.pl $sample.sam1 > $sample.sam") unless (-s "$sample.sam");	# only keep the best hits of reads alignment to reference
+		process_cmd("$BIN_DIR/samtools view -bt $reference.fai $sample.sam > $sample.bam") unless (-s "$sample.bam");
+		process_cmd("$BIN_DIR/samtools sort $sample.bam $sample.sorted") unless (-s "$sample.sorted.bam");
+		process_cmd("$BIN_DIR/samtools mpileup -f $reference $sample.sorted.bam > $sample.pre.pileup") unless (-s "$sample.pre.pileup");
+
+		#如果一个reference覆盖的区域不到其长度的某个比例，则去除这个reference所对应的所有行
 		my $depth_cutoff;
-		$depth_cutoff = &pileup_filter("$sample.pre.pileup", "$seq_info", "$coverage", "$sample.pileup") unless (-s "$sample.pileup");#如果一个reference覆盖的区域不到其长度的某个比例，则去除这个reference所对应的所有行
+		$depth_cutoff = pileup_filter("$sample.pre.pileup", "$seq_info", "$coverage", "$sample.pileup") unless (-s "$sample.pileup");
         
-		my $file_size= -s "$sample.pileup";#根据pileup文件大小是不是0，进入下面处理流程
-		if($file_size!=0){#如果文件大小不是0，
-			&process_cmd("java -cp $BIN_DIR extractConsensus $sample 0 40 1");#提取连续片段（depth>=1,length>=40），文件名含有1			
-			my $result_contigs=$sample.".contigs1.fa";#这个是corrected的序列
+		my $file_size = -s "$sample.pileup";	# get the size of pileup file
+		if($file_size != 0){
+			&process_cmd("java -cp $BIN_DIR extractConsensus $sample 0 40 1");	#提取连续片段（depth>=1,length>=40），文件名含有1			
+			my $result_contigs=$sample.".contigs1.fa";							#这个是corrected的序列
 			my $count = `grep \'>\' $result_contigs | wc -l`;
-			print "@".$sample."\t".$count;#统计得到多少序列，java程序运行后，得到的序列有可能为0
-			if($count!=0){ #如果$sample.contigs1.fa的序列数量不为0，改名称后转移到aligned文件夹
+			print "@".$sample."\t".$count;										#统计得到多少序列，java程序运行后，得到的序列有可能为0
+			if($count!=0){ 														#如果$sample.contigs1.fa的序列数量不为0，改名称后转移到aligned文件夹
 				system("$BIN_DIR/renameFasta.pl --inputfile $result_contigs --outputfile $sample.contigs2.fa --prefix ALIGNED");#每条序列的名字要统一命名
-				system("mv $sample.contigs2.fa ./aligned/$sample.contigs1.fa");#把结果文件移动到aligned文件夹
+				system("mv $sample.contigs2.fa ./aligned/$sample.contigs1.fa");	#把结果文件移动到aligned文件夹
 				system("rm $result_contigs");
 			}
-			else{#如果$sample.contigs1.fa的序列数量为0，直接转移到aligned文件夹
-				system("mv $result_contigs ./aligned/$sample.contigs1.fa");#把结果文件移动到aligned文件夹	
+			else{																#如果$sample.contigs1.fa的序列数量为0，直接转移到aligned文件夹
+				system("mv $result_contigs ./aligned/$sample.contigs1.fa");		#把结果文件移动到aligned文件夹	
 			}
 		}	
-		else{#如果文件大小是0，或者$sample.pileup不存在
-			print "@".$sample."\t0\n";#得到0条序列
-			system("touch ./aligned/$sample.contigs1.fa");#建立一个空的结果文件			
+		else{																	#如果文件大小是0，或者$sample.pileup不存在
+			print "@".$sample."\t0\n";											#得到0条序列
+			system("touch ./aligned/$sample.contigs1.fa");						#建立一个空的结果文件			
 		}			
 		system("rm $sample.sai");
 		system("rm $sample.pre.sam");
@@ -128,11 +134,11 @@ main: {
 	close(IN);
 	print "###############################\n";
 	print "All the input files have been processed by $0\n";
-	system("touch bwa-alignAndCorrect.run.finished");#建立这个文件，表示结束标志
+	#system("touch bwa-alignAndCorrect.run.finished");							#建立这个文件，表示结束标志
 }
 
 #################
-##    子程序   ##
+# subroutine    #
 #################
 sub process_cmd {
 	my ($cmd) = @_;	
@@ -145,7 +151,6 @@ sub process_cmd {
 }
 sub pileup_filter {
 	my ($inputfile,$seq_info,$ratio,$outputfile) = @_;
-	
 	open(IN1, "$seq_info" );#读入此文件中序列的长度信息
 	my %hash;
 	my @a;
@@ -157,7 +162,6 @@ sub pileup_filter {
 		$hash{$id}=$a[1];#第2列是序列长度，存入一个hash表中
 	}
 	close IN1;
-
 
 	open(IN2,  "$inputfile" );
 	open(OUT, ">$outputfile" );
@@ -196,7 +200,7 @@ sub pileup_filter {
 	    push @data, $line;#每次循环都要存pileup文件的一行
 	    $pre_reference=$current_reference;
 	}
-	print "the average depth of $inputfile is \t".1.0*$totalDepth/$totalPositions."\n";
+	print "the average depth of $inputfile is \t", 1.0*$totalDepth/$totalPositions, "\n";
 
 	#别忘了处理剩下的部分内容
 	$len_threshold=$hash{$current_reference}*$ratio;

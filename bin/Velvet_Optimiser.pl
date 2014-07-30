@@ -27,8 +27,8 @@ _EOUSAGE_
 ##   全局变量（含默认设置）  ##
 ###############################	
 our $file_list;              #包括所有待处理的样本的文本文件名称（无后缀）
-our $input_suffix;           #输入数据文件的后缀名（clean或unmapped），注意没有"."
-our $file_type="fastq";#输入文件的类型，当前只支持fastq和fasta格式
+our $input_suffix = '';           #输入数据文件的后缀名（clean或unmapped），注意没有"."
+our $file_type="fastq";		#输入文件的类型，当前只支持fastq和fasta格式
 our $velvet_dir;             #velvet的安装目录
 our $objective_type='maxLen';#优化目标值的类型，只有n50、maxLen和avgLen三种
 our $hash_end;               #优化所尝试的k-mer长度范围的最大值
@@ -40,27 +40,24 @@ our $coverage_start=5;
 ################################
 ##   设置所有目录和文件的路径 ##
 ################################
-our $WORKING_DIR=cwd();#工作目录就是当前目录
+our $WORKING_DIR=cwd();			#工作目录就是当前目录
 $velvet_dir=$WORKING_DIR."/bin";#设置默认velvet路径; 
 
 #################
 ## 输入参数处理##
 #################
-&GetOptions( 'file_list=s' => \$file_list,#包括所有待处理的样本的文本文件名称（无后缀）			 
-			'input_suffix=s' => \$input_suffix,
-			'file_type=s' => \$file_type,
-			'velvet_dir=s' => \$velvet_dir,
-			'objective_type=s' => \$objective_type,			 			 
-			'hash_end=i' => \$hash_end,
-			'coverage_end=i' => \$coverage_end);
+GetOptions( 'file_list=s'		=> \$file_list,		#包括所有待处理的样本的文本文件名称（无后缀）			 
+			'input_suffix=s'	=> \$input_suffix,
+			'file_type=s'		=> \$file_type,
+			'velvet_dir=s'		=> \$velvet_dir,
+			'objective_type=s'	=> \$objective_type,			 			 
+			'hash_end=i'		=> \$hash_end,
+			'coverage_end=i'	=> \$coverage_end
+);
 			 
-unless ($file_list&&$hash_end&&$coverage_end) {
-	die $usage;
-}
+die $usage unless ($file_list && $hash_end && $coverage_end);	# required parameters
 
-#################
-##  主程序开始 ##
-#################
+# main
 main: {
     my $sample;
     my $sampleNum=0;
@@ -125,20 +122,20 @@ main: {
 	close(OUT2);
 	system("rm velvet.log");
 	print "###############################\n";
-        print "All the samples have been processed by $0\n";
-	system("touch Velvet_Optimiser.run.finished");#建立这个文件，表示结束标志
+    print "All the samples have been processed by $0\n";
+	#system("touch Velvet_Optimiser.run.finished");
 }
 
-#################
-##    子程序   ##
-#################
+# subroutine
 sub runVelvet {
 	my $sample1=shift;
 	my $hash_length=shift;
 	my $cov_cutoff=shift;
 	my $outputDir=$sample1."_".$hash_length."_".$cov_cutoff;
 	#下面执行command lines
-	&process_cmd($velvet_dir."/velveth $outputDir $hash_length -$file_type $sample1.$input_suffix >> velvet.log");
+	
+	my $file = $sample1.$input_suffix;
+	&process_cmd($velvet_dir."/velveth $outputDir $hash_length -$file_type $file >> velvet.log");
 	&process_cmd($velvet_dir."/velvetg $outputDir -cov_cutoff $cov_cutoff -min_contig_lgth 30 >> velvet.log");	
 }
 sub process_cmd {

@@ -106,14 +106,15 @@ while(<IN1>){
 	process_cmd ("$BIN_DIR/cd-hit -i $sample.contigs$i.fa -o $sample.contigs$k.fa -T $cpu_num -c 0.93 >> remove_redundancy.log");		
 	process_cmd("rm $sample.contigs$i.fa");#删除旧文件
 	#去冗余完毕，开始进行base correction
-	my $sample_reference= $sample.".contigs$k.fa";#去除冗余的结果文件，产生新contigs，将作为参考，进行校正
-	my $sample_reads= $sample.".clean";#read文件，需要align到新contigs上	
+	my $sample_reference= $sample.".contigs$k.fa";	#去除冗余的结果文件，产生新contigs，将作为参考，进行校正
+	#my $sample_reads= $sample.".clean";		#read文件，需要align到新contigs上	
+	$sample_reads= $sample;				# do not use the suffix of input file, just use the file name
 	#aligment -> sam -> bam -> sorted bam -> pileup
 	my $format="-q";
 	if($file_type eq "fasta"){$format="-f"};
 	&process_cmd("$BIN_DIR/bowtie-build --quiet -f $sample_reference $sample") unless (-e "$sample.1.amb");
 	&process_cmd("$BIN_DIR/samtools faidx $sample_reference") unless (-e "$sample_reference.fai");
-	&process_cmd("$BIN_DIR/bowtie --quiet $sample -v 1 -p $cpu_num $format $sample.clean -S -a --best $sample.sam") unless (-s "$sample.sam");
+	&process_cmd("$BIN_DIR/bowtie --quiet $sample -v 1 -p $cpu_num $format $sample -S -a --best $sample.sam") unless (-s "$sample.sam");
 	&process_cmd("$BIN_DIR/samtools view -bt $sample_reference.fai $sample.sam > $sample.bam") unless (-s "$sample.bam");
 	&process_cmd("$BIN_DIR/samtools sort $sample.bam $sample.sorted") unless (-s "$sample.sorted.bam");
 	&process_cmd("$BIN_DIR/samtools mpileup -f $sample_reference $sample.sorted.bam > $sample.pileup") unless (-s "$sample.pileup");	

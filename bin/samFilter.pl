@@ -46,4 +46,3 @@ if ($nmv > -1) {
 	$pre_query_name = ''; 
 }
 
-

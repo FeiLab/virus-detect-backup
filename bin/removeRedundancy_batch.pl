@@ -33,15 +33,15 @@ _EOUSAGE_
 #################
 ##   全局变量  ##
 #################
-our $file_list; #包括所有待处理的样本的文本文件名称（无后缀）
-our $file_type;#输入文件的类型，当前只支持fastq和fasta格式
-our $input_suffix;#输入文件的后缀名称
-our $contig_type; #contig类型，决定了输出文件夹是aligned还是assembled
-our $contig_prefix;#fasta文件改名时，每条记录用到的前缀
+our $file_list;		#包括所有待处理的样本的文本文件名称（无后缀）
+our $file_type;		#输入文件的类型，当前只支持fastq和fasta格式
+our $input_suffix;	#输入文件的后缀名称
+our $contig_type; 	#contig类型，决定了输出文件夹是aligned还是assembled
+our $contig_prefix;	#fasta文件改名时，每条记录用到的前缀
 
-our $strand_specific;  #专门用于strand specific转录组
-our $min_overlap = 30; #hsp合并时，最短的overlap
-our $max_end_clip = 6; #hsp合并时，两端允许的最小clip
+our $strand_specific;	#专门用于strand specific转录组
+our $min_overlap = 30;	#hsp合并时，最短的overlap
+our $max_end_clip = 6; 	#hsp合并时，两端允许的最小clip
 our $cpu_num = 8;          #megablast使用的cpu数目
 our $mis_penalty = -1;     #megablast中，对错配的罚分，必须是负整数
 our $gap_cost = 2;         #megablast中，对gap open的罚分，必须是正整数
@@ -71,8 +71,7 @@ our $CONTIG_DIR;#指定的病毒contig所在的目录
 	'gap_extension=i' => \$gap_extension			 			 
 			 );
 			 
-unless ($file_list&&$input_suffix&&$contig_type&&$contig_prefix) {#这4个参数通过输入得到
-die $usage;}
+die $usage unless ($file_list && $input_suffix && $contig_type && $contig_prefix);	# required parameters
 
 $CONTIG_DIR=$WORKING_DIR."/$contig_type";
 #################
@@ -86,12 +85,14 @@ while(<IN1>){
 	chomp;
 	$sample=$_; #每次循环读入一行，后续代码都是处理该样本文件（名称无后缀）。
 	print "#processing sample $j by $0: $sample\n";
-		
-	my $file_size= -s "$CONTIG_DIR/$sample.$input_suffix";#根据该样本文件是不是0，进入下面处理流程
-	if($file_size==0){#如果文件大小是0，跳过下面的指令直接进入下一次循环
+	
+	# get aligned files size, and mv the blank file to corresponding contig type file	
+	my $file_size= -s "$CONTIG_DIR/$sample.$input_suffix";
+	if($file_size==0){
 		system ("mv $CONTIG_DIR/$sample.$input_suffix $CONTIG_DIR/$sample.$contig_type.fa");
 		next;
 	}
+
 	#否则，移动到当前目录来去冗余
 	system ("$BIN_DIR/dust $CONTIG_DIR/$sample.$input_suffix 1> $sample.masked 2> dust.log");#首先mask简单重复序列
 	system ("$BIN_DIR/trim_XNseq1.pl $sample.masked $CONTIG_DIR/$sample.$input_suffix 0.8 40 > $sample.$input_suffix");
@@ -115,15 +116,16 @@ while(<IN1>){
 		chomp($contig_num2);	
               	system ("mv inset $sample.contigs$i.fa");	
 	}
+
 	#去冗余完毕，开始进行base correction
-	my $sample_reference= $sample.".contigs$i.fa";#去除冗余的结果文件，产生新contigs，将作为参考，进行校正
-	my $sample_reads= $sample.".clean";#read文件，需要align到新contigs上	
+	my $sample_reference= $sample.".contigs$i.fa";	# sample_reference file after remove Redundancy 
+	my $sample_reads= $sample;			# read file, need to re-aligned to sample_reference file	
+
 	#aligment -> sam -> bam -> sorted bam -> pileup
-	my $format="-q";
-	if($file_type eq "fasta"){$format="-f"};
+	my $format="-q"; if ($file_type eq "fasta") {$format="-f"};
 	&process_cmd("$BIN_DIR/bowtie-build --quiet -f $sample_reference $sample") unless (-e "$sample.1.amb");
 	&process_cmd("$BIN_DIR/samtools faidx $sample_reference") unless (-e "$sample_reference.fai");
-	&process_cmd("$BIN_DIR/bowtie --quiet $sample -v 1 -p $cpu_num $format $sample.clean -S -a --best $sample.sam") unless (-s "$sample.sam");
+	&process_cmd("$BIN_DIR/bowtie --quiet $sample -v 1 -p $cpu_num $format $sample -S -a --best $sample.sam") unless (-s "$sample.sam");
 	&process_cmd("$BIN_DIR/samtools view -bt $sample_reference.fai $sample.sam > $sample.bam") unless (-s "$sample.bam");
 	&process_cmd("$BIN_DIR/samtools sort $sample.bam $sample.sorted") unless (-s "$sample.sorted.bam");
 	&process_cmd("$BIN_DIR/samtools mpileup -f $sample_reference $sample.sorted.bam > $sample.pileup") unless (-s "$sample.pileup");	
@@ -133,6 +135,7 @@ while(<IN1>){
 		system ("touch $CONTIG_DIR/$sample.$contig_type.fa");
 		next;
 	}
+
 	#否则继续下面处理
 	$i++;
 	&process_cmd("java -cp $BIN_DIR extractConsensus $sample 1 40 $i");
@@ -151,6 +154,7 @@ while(<IN1>){
 close(IN1);
 print "###############################\n";
 print "All the samples have been processed by $0\n";
+
 system("touch removeRedundancy_batch.$contig_type.finished");#建立这个文件，表示结束标志
 system("rm tem.*");
 system("rm tem");
