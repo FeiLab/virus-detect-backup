@@ -4,6 +4,10 @@ use warnings;
 use Getopt::Long;
 use Cwd;
 use FindBin;
+use lib "$FindBin::RealBin/bin/PerlLib";
+use IO::File;
+use Util;
+
 my $usage = <<_EOUSAGE_;
 
 #########################################################################################
@@ -46,64 +50,71 @@ my $usage = <<_EOUSAGE_;
 #  --gap_cost_b      Cost to open a gap [2] 
 #  --gap_extension_b Cost to extend a gap [1]
 #
+# Result filter options(4):
+#  --hsp_cover		The coverage of hsp should be more than this cutoff for query or hit [0.75]
+#  --diff_ratio 	The hits with distance less than 0.25 will be combined into one  [0.25]
+#  --diff_contig_cover	The coverage for different contigs [0.5]
+#  --diff_contig_length	The length of different contigs [100] 
+#
 ###########################################################################################
 
 _EOUSAGE_
-
-	;
+;
 
 ################################
 ##  set file folder path      ##
 ################################
-our $WORKING_DIR  = cwd();				# set current folder as working folder
-our $DATABASE_DIR = ${FindBin::RealBin}."/databases";	# set database folder
-our $BIN_DIR	  = ${FindBin::RealBin}."/bin";		# set programs folder 
+my $WORKING_DIR   = cwd();				# set current folder as working folder
+my $DATABASE_DIR  = ${FindBin::RealBin}."/databases";	# set database folder
+my $BIN_DIR	  = ${FindBin::RealBin}."/bin";		# set script folder 
+my $TEMP_DIR	  = $WORKING_DIR."/temp";		# set temp folder
 
 ###############################
 ##   global vars	     ##
 ###############################
-our $file_list;					#包括所有待处理的输入文件（数据）的列表文件（无后缀）
-our $file_type= "fastq";			#输入文件的类型，当前只支持fastq和fasta格式
-our $reference= "vrl_genbank.fasta";		#包括全部参考序列的文件名称（FASTA格式）
-our $coverage=0.3;  				#每条参考序列如果被reads覆盖的部分占全长比例的阈值
-our $host_removal;         			#是否需要remove host
-our $host_reference;       			#如果要remove host，必须提供一个文件包括host的全部参考序列
-our $objective_type='maxLen';			#优化目标值的类型，只有n50、maxLen和avgLen三种
+my $file_type= "fastq";				# input file type, fasta or fastq
+my $reference= "vrl_genbank.fasta";		# virus sequence
+my $coverage=0.3;  				# 每条参考序列如果被reads覆盖的部分占全长比例的阈值
+my $host_removal;         			# switch for host removing
+my $host_reference;       			# host reference
+my $objective_type='maxLen';			# objective type for Velvet assembler: n50、maxLen, avgLen
 
 # paras for BWA
+my $max_dist = 1;  				# max edit distance 
+my $max_open = 1;  				# max gap opening
+my $max_extension = 1; 				# max gap extension (gap length)
+my $len_seed = 15; 				# bwa seed length
+my $dist_seed = 1; 				# bwa seed max edit distance
+my $thread_num = 8; 				# bwa thread number
 
-our $max_dist = 1;  				#bwa允许的最大编辑距离 
-our $max_open = 1;  				#bwa允许的最大gap数量
-our $max_extension = 1; 			#bwa允许的最大gap长度,-1表示不允许长gap
-our $len_seed = 15; 				#bwa中的种子区长度
-our $dist_seed = 1; 				#bwa种子区允许的最大编辑距离
-our $thread_num = 8; 				#bwa程序调用的线程数量 
-
-# paras for megablast detection
-
-our $strand_specific;  				#专门用于strand specific转录组
-our $min_overlap = 30; 				#hsp合并时，最短的overlap
-our $max_end_clip = 6; 				#hsp合并时，两端允许的最小clip
-our $cpu_num = 8;          			#megablast使用的cpu数目
-our $mis_penalty = -1;     			#megablast中，对错配的罚分，必须是负整数
-our $gap_cost = 2;         			#megablast中，对gap open的罚分，必须是正整数
-our $gap_extension = 1;    			#megablast中，对gap open的罚分，必须是正整数
+# paras for megablast detection (remove redundancy )
+my $strand_specific;  				# switch for strand specific transcriptome data? 
+my $min_overlap = 30; 				# minimum overlap for hsp combine
+my $max_end_clip = 6; 				# max end clip for hsp combine
+my $cpu_num = 8;          			# thread number
+my $mis_penalty = -1;     			# megablast mismatch penlty, minus integer
+my $gap_cost = 2;         			# megablast gap open cost, plus integer
+my $gap_extension = 1;    			# megablast gap extension cost, plus integer 
 
 # paras for blast && identification 
+my $word_size = 11;
+my $exp_value = 1e-5;				#
+my $identity_percen = 25;			# tblastx 以蛋白质序列来比对时hsp的最小同一性
+my $mis_penalty_b = -1;				# megablast mismatch penlty, minus integer
+my $gap_cost_b = 2;				# megablast gap open cost, plus integer
+my $gap_extension_b = 1;			# megablast gap extension cost, plus integer
 
-our $diff_ratio= 0.25;
-our $word_size = 11;
-our $exp_value = 1e-5;				#
-our $identity_percen = 25;			# tblastx以蛋白质序列来比对时hsp的最小同一性
-our $mis_penalty_b = -1;			# megablast中，对错配的罚分，必须是负整数
-our $gap_cost_b = 2;				# megablast中，对gap open的罚分，必须是正整数
-our $gap_extension_b = 1;			# megablast中，对gap open的罚分，必须是正整数
+my $filter_query = "F";				# megablast switch for remove simple sequence
+my $hits_return = 500;				# megablast number of hit returns
 
-our $filter_query = "F";			# 默认不需要去除简单序列，这个不需要用户设定
-our $hits_return = 500;				# megablast返回的hit数目，这个不需要用户设定
+# paras for result filter
+my $hsp_cover = 0.75;
+my $diff_ratio= 0.25;
+my $diff_contig_cover = 0.5;
+my $diff_contig_length= 100; 
 
 # disabled parameters
-our $input_suffix='clean'; 			# 数据文件后缀（clean或unmapped）
+my $input_suffix='clean'; 			# input_suffix, disabled
 
 # get input paras #
 GetOptions(
@@ -128,27 +139,26 @@ GetOptions(
 	'mis_penalty=i' => 	\$mis_penalty,
 	'gap_cost=i' => 	\$gap_cost,
 	'gap_extension=i' => 	\$gap_extension,
-
-
-	'diff_ratio=s' => 	\$diff_ratio,
+	
 	'word_size=i' =>  	\$word_size,
 	'exp_value-s' =>  	\$exp_value,
 	'identity_percen=s' => 	\$identity_percen,	# tblastx以蛋白质序列来比对时hsp的最小同一性
 	'mis_penalty_b=i' => 	\$mis_penalty_b,
 	'gap_cost_b=i' => 	\$gap_cost_b,
-	'gap_extension_b=i' => 	\$gap_extension_b
+	'gap_extension_b=i' => 	\$gap_extension_b,
+
+	'hsp_cover=s' =>	\$hsp_cover,
+	'diff_ratio=s' => 	\$diff_ratio,
+	'diff_contig_cover=s' =>\$diff_contig_cover,
+	'diff_contig_length=s'=>\$diff_contig_length
 );
 
-#die $usage unless $file_list;
+# put input file parameters to filelist array
 my @filelist;
-if ( !@ARGV )
-{
+if ( !@ARGV ) {
 	die "\nPlease input files:\n\n$usage\n";
-}
-else
-{
-	foreach my $m (@ARGV)
-	{
+} else {
+	foreach my $m (@ARGV) {
 		if (-s $m) {
 			push(@filelist, $m);
 		} else {
@@ -157,84 +167,109 @@ else
 	}
 }
 
-$file_list = "file_list_tp";
-open(LS, ">".$file_list) || die $!;
-if (scalar(@filelist) > 0) {
-	foreach my $f (@filelist) {
-		print LS $f."\n";
-	}
-} else {
-	die "\nPlease input files:\n\n$usage\n";
-}
-close(LS);
+# set paramsters
+my $parameters_remove_redundancy = "--min_overlap $min_overlap --max_end_clip $max_end_clip --cpu_num $cpu_num ".
+				   "--mis_penalty $mis_penalty --gap_cost $gap_cost --gap_extension $gap_extension";
+if ($strand_specific) { $parameters_remove_redundancy.=" --strand_specific"; }
+
+my $parameters_bwa_align = "--max_dist $max_dist --max_open $max_open --max_extension $max_extension ".
+			   "--len_seed $len_seed --dist_seed $dist_seed --thread_num $thread_num";
 
 # main
 main: {
+
+	# create temp folder
+	# create softlink for input file
+	# create temp file list for input file
+	# *the file in file list has full path
+	Util::process_cmd("mkdir $TEMP_DIR") unless -e $TEMP_DIR;
+	my $file_list = "$TEMP_DIR/temp_file_list";
+	my $fh_list = IO::File->new(">".$file_list) || "Can not open temp file list $file_list $!\n";
+	foreach my $sample (@filelist) { 
+		Util::process_cmd("ln -s $WORKING_DIR/$sample $TEMP_DIR/$sample") unless -e "$TEMP_DIR/$sample";
+		print $fh_list $TEMP_DIR."/".$sample."\n"; 
+	}
+	$fh_list->close;
+
 	# detect known virus
 	# align small RNA reads to know plant virus sequence 
 	print "alignend small RNA to know plant virus database: $reference\n";
-	system("mkdir aligned");
+	my $cmd_align = "$BIN_DIR/bwa-alignAndCorrect.pl --file_list $file_list --reference $DATABASE_DIR/$reference --coverage $coverage ".
+			"$parameters_bwa_align --output_suffix aligned";
+	Util::process_cmd($cmd_align);
 
-	my $cmd_align = "$BIN_DIR/bwa-alignAndCorrect.pl --file_list $file_list --reference $DATABASE_DIR/$reference --coverage $coverage --max_dist $max_dist --max_open $max_open --max_extension $max_extension --len_seed $len_seed --dist_seed $dist_seed --thread_num $thread_num";
-	print $cmd_align."\n";
-	system($cmd_align) && die "Error in command $cmd_align\n";  
+	# remove redundancy
+	my $cmd_removeRedundancy = "$BIN_DIR/removeRedundancy_batch.pl --file_list $file_list --file_type $file_type --input_suffix aligned ".
+				   "--contig_prefix KNOWN $parameters_remove_redundancy";
+	Util::process_cmd($cmd_removeRedundancy);
 
-	if($strand_specific){
-		system("$BIN_DIR/removeRedundancy_batch.pl --file_list $file_list --file_type $file_type --input_suffix contigs1.fa --contig_type aligned --contig_prefix KNOWN --min_overlap $min_overlap --max_end_clip $max_end_clip --cpu_num $cpu_num --mis_penalty $mis_penalty --gap_cost $gap_cost --gap_extension $gap_extension");
-	}
-	else{
-		system("$BIN_DIR/removeRedundancy_batch.pl --file_list $file_list --file_type $file_type --input_suffix contigs1.fa --contig_type aligned --contig_prefix KNOWN --strand_specific --min_overlap $min_overlap --max_end_clip $max_end_clip --cpu_num $cpu_num --mis_penalty $mis_penalty --gap_cost $gap_cost --gap_extension $gap_extension");
-	}
-	
-	#detect unknown virus
+	#detect unknown virus, then assembly them 
 	print "\nassembly small RNA to contigs\n\n";
-	system("mkdir assembled");
 
 	if($host_removal){	
-		system("$BIN_DIR/bwa_remove.pl --file_list $file_list --reference $DATABASE_DIR/$host_reference --max_dist $max_dist --max_open $max_open --max_extension $max_extension --len_seed $len_seed --dist_seed $dist_seed --thread_num $thread_num");
-		$input_suffix='.unmapped'; #以后处理的文件后缀名称由clean变为unmapped
-		#这里要注意，从sam文件中提取的数据都是fastq文件，无论原始文件是fastq还是fasta
-		system("$BIN_DIR/Velvet_Optimiser.pl --file_list $file_list --input_suffix $input_suffix  --file_type fastq --objective_type $objective_type --hash_end 19 --coverage_end 25");
-		system("$BIN_DIR/runVelvet.pl --parameters optimization.result --input_suffix $input_suffix --file_type fastq --output_suffix contigs1.fa");
-		system("rm *.unmapped");#得到contig1.fa，就不需要unmapped文件了
+		Util::process_cmd("$BIN_DIR/bwa_remove.pl --file_list $file_list --reference $DATABASE_DIR/$host_reference $parameters_bwa_align");
+		# kentnf: this could be writen to a subroutine
+
+		# the input suffix of unmapped reads is 'unmapped'
+		# the seq from sam file is fastq format, no matter the format of input file
+		Util::process_cmd("$BIN_DIR/Velvet_Optimiser.pl --file_list $file_list --input_suffix unmapped --file_type fastq --objective_type $objective_type --hash_end 19 --coverage_end 25");
+		Util::process_cmd("$BIN_DIR/runVelvet.pl --parameters $TEMP_DIR/optimization.result --input_suffix unmapped --file_type fastq --output_suffix assemblied");
 	}	
-	else{
-		system("$BIN_DIR/Velvet_Optimiser.pl --file_list $file_list --file_type $file_type --objective_type $objective_type --hash_end 19 --coverage_end 25");
-		system("$BIN_DIR/runVelvet.pl --parameters optimization.result --file_type $file_type --output_suffix contigs1.fa");
+	else
+	{
+		Util::process_cmd("$BIN_DIR/Velvet_Optimiser.pl --file_list $file_list --file_type $file_type --objective_type $objective_type --hash_end 19 --coverage_end 25");
+		Util::process_cmd("$BIN_DIR/runVelvet.pl --parameters $TEMP_DIR/optimization.result --file_type $file_type --output_suffix assemblied");
 	}
 
+	# remove redundancy of assembly results
 	print "\nremove redundancy for assemblied unknown small RNA\n\n";
-	if($strand_specific){
-	
-		system("$BIN_DIR/removeRedundancy_batch.pl --file_list $file_list --file_type $file_type --input_suffix contigs1.fa --contig_type assembled --contig_prefix NOVEL --min_overlap $min_overlap --max_end_clip $max_end_clip --cpu_num $cpu_num --mis_penalty $mis_penalty --gap_cost $gap_cost --gap_extension $gap_extension");
-	}
-	else{
-		system("$BIN_DIR/removeRedundancy_batch.pl --file_list $file_list --file_type $file_type --input_suffix contigs1.fa --contig_type assembled --contig_prefix NOVEL --strand_specific --min_overlap $min_overlap --max_end_clip $max_end_clip --cpu_num $cpu_num --mis_penalty $mis_penalty --gap_cost $gap_cost --gap_extension $gap_extension");
-	}
+	$cmd_removeRedundancy = "$BIN_DIR/removeRedundancy_batch.pl --file_list $file_list --file_type $file_type --input_suffix assemblied ".
+				"--contig_prefix NOVEL $parameters_remove_redundancy";
+	Util::process_cmd($cmd_removeRedundancy);
 
 	# combine the known and unknown virus
 	print "combine the known and unkown contigs\n";
-	system("mkdir combined");
-	system("$BIN_DIR/files_combine2.pl --filelist $file_list --folder1 aligned --folder2 assembled");
+	files_combine2($file_list);
 
+	# remove redundancy of combined results, it must be using strand_specific parameter
 	print "remove redundancy\n";
-	system("$BIN_DIR/removeRedundancy_batch.pl --file_list $file_list --file_type $file_type --input_suffix contigs1.fa --contig_type combined --contig_prefix CONTIG --strand_specific --min_overlap $min_overlap --max_end_clip $max_end_clip --cpu_num $cpu_num --mis_penalty $mis_penalty --gap_cost $gap_cost --gap_extension $gap_extension");
-	
-	print "finished\n";
-
-	unlink("optimization.result");
-	unlink("velvet_assembly.result");
-	#system("touch virus_detect.run.finished");	# create sign for the end of virus detection
+	$cmd_removeRedundancy = "$BIN_DIR/removeRedundancy_batch.pl --file_list $file_list --file_type $file_type --input_suffix combined ".
+       				"--contig_prefix CONTIG --strand_specific $parameters_remove_redundancy";
+	Util::process_cmd($cmd_removeRedundancy);
 
 	# identify the virus
 	my $cmd_identify = "$BIN_DIR/virus_identify.pl ";
        	$cmd_identify .= "--file_list $file_list --file_type $file_type --reference $reference --contig_type combined ";
-	$cmd_identify .= "--diff_ratio $diff_ratio --word_size $word_size --exp_value $exp_value --identity_percen $identity_percen ";
+	$cmd_identify .= "--word_size $word_size --exp_value $exp_value --identity_percen $identity_percen ";
 	$cmd_identify .= "--cpu_num $cpu_num --mis_penalty $mis_penalty_b --gap_cost $gap_cost_b --gap_extension $gap_extension_b ";
-	system($cmd_identify) && die "Error in command: $cmd_identify\n";
+	$cmd_identify .= "--hsp_cover $hsp_cover --diff_ratio $diff_ratio --diff_contig_cover $diff_contig_cover --diff_contig_length $diff_contig_length ";
+	Util::process_cmd($cmd_identify);
 
-	# delete list file
-	unlink($file_list);
+	# delete temp files and log files 
+	system("rm -r *.log");
+	system("rm -r temp");
 }
 
 
+#################################################################
+# subroutine							#
+#################################################################
+
+=head2
+ files_combine2 : combine known and unknown virus
+=cut
+sub files_combine2
+{
+	my $file_list = shift;
+	my $fh = IO::File->new($file_list) || die "Can not open innput file list $file_list $!\n";
+	while(<$fh>)
+	{
+		chomp;
+		my $file = $_;
+		my $file_aligned	= $file.".aligned";
+		my $file_assemblied	= $file.".assemblied";
+		my $file_combined	= $file.".combined";
+		Util::process_cmd("cat $file_aligned $file_assemblied > $file_combined");
+	}
+	$fh->close;
+}

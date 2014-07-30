@@ -5,6 +5,8 @@ use Getopt::Long;
 use Cwd;
 use FindBin;
 use File::Basename;
+use IO::File;
+use Bio::SeqIO;
 
 my $usage = <<_EOUSAGE_;
 
@@ -32,24 +34,27 @@ _EOUSAGE_
 #################
 #  global vars  #
 #################
-our $file_list;			# list of sample name
-our $reference;			# reference sequence, fasta format
-our $index_name;		# index name for reference
-our $coverage;  		# cutoff of mapping reads / reference
-our $max_dist = 1; 		# BWA allowed max distance 
-our $max_open = 1; 		# BWA allowed max gap opens
+our $file_list;		# list of sample name
+our $reference;		# reference sequence, fasta format, full path
+our $coverage;  	# cutoff of mapping reads / reference
+our $max_dist = 1; 	# BWA allowed max distance 
+our $max_open = 1; 	# BWA allowed max gap opens
 our $max_extension = 1; # BWA allowed max gap extension
 our $len_seed = 15; 	# length of seed
 our $dist_seed = 1; 	# BWA allowed seed max distance
 our $thread_num = 8; 	# thread number
+our $output_suffix;	# output suffix
 
 ################################
 # set folder and file path     #
 ################################
-our $WORKING_DIR	= cwd();								# current folder
+our $WORKING_DIR	= cwd();				# current folder
+our $TEMP_DIR		= $WORKING_DIR."/temp";			# temp foldr
 our $DATABASE_DIR	= ${FindBin::RealBin}."/../databases";	# database folder
-our $BIN_DIR		= ${FindBin::RealBin};					# programs folder
+our $BIN_DIR		= ${FindBin::RealBin};			# programs folder
 our $seq_info		= $DATABASE_DIR."/vrl_genbank.info";	# genbank info
+
+my $tf = $TEMP_DIR; # short name of temp folder for easy to do
 
 ###################
 # get input paras #
@@ -63,112 +68,126 @@ GetOptions(
 	'max_extension=i' 	=> \$max_extension,
 	'len_seed=i' 		=> \$len_seed,
 	'dist_seed=i' 		=> \$dist_seed,			 
-	'thread_num=i' 		=> \$thread_num 
+	'thread_num=i' 		=> \$thread_num,
+	'output_suffix=s'	=> \$output_suffix
 );
 
-die $usage unless ($file_list && $reference && $coverage);	# required parameters
-$index_name = basename($reference);							# remove folder name
-#$index_name =~ s/\.\S*$//;									# remove suffix
+die $usage unless ($file_list && $reference && $coverage && $output_suffix);	# required parameters
 
 #################
 # main          #
 #################
 main: {
+
     # create bwa and fasta index file for reference file (plant virus)   
-    process_cmd("$BIN_DIR/bwa index -p $DATABASE_DIR/$index_name -a bwtsw $reference 2> bwa.log") unless (-e "$DATABASE_DIR/$index_name.amb"); 
+    process_cmd("$BIN_DIR/bwa index -p $reference -a bwtsw $reference 2> $tf/bwa.log") unless (-e "$reference.amb"); 
     process_cmd("$BIN_DIR/samtools faidx $reference") unless (-e "$reference.fai");
     
-	# parse samples in file list 
-	my $sample;
-    my $i=0;
+    # parse samples in file list 
+    my ($i, $sample, $output_file);
+    $i=0;
     open(IN, "$file_list") || die $!;
     while (<IN>) {
 		$i=$i+1;
 		chomp;
-		$sample=$_;
+		$sample = $_;
+		$output_file = $sample.".".$output_suffix;
 		die "Error, file $sample does not exist\n" unless -s $sample;		
-		print "#processing sample $i by $0: $sample\n";
-		
+		print "# processing the $i sample -- $sample using $0\n";
+
 		#aligment -> sam -> bam -> sorted bam -> pileup
-		process_cmd("$BIN_DIR/bwa aln -n $max_dist -o $max_open -e $max_extension -i 0 -l $len_seed -k $dist_seed -t $thread_num $DATABASE_DIR/$index_name $sample 1> $sample.sai 2>> bwa.log") unless (-s "$sample.sai");
-		process_cmd("$BIN_DIR/bwa samse -n 10000 -s $DATABASE_DIR/$index_name $sample.sai $sample 1> $sample.pre.sam 2>> bwa.log") unless (-s "$sample.pre.sam");			
-		process_cmd("$BIN_DIR/SAM_filter_out_unmapped_reads.pl $sample.pre.sam > $sample.sam1") unless (-s "$sample.sam1");
-		process_cmd("$BIN_DIR/samFilter.pl $sample.sam1 > $sample.sam") unless (-s "$sample.sam");	# only keep the best hits of reads alignment to reference
+		process_cmd("$BIN_DIR/bwa aln -n $max_dist -o $max_open -e $max_extension -i 0 -l $len_seed -k $dist_seed -t $thread_num $reference $sample 1> $sample.sai 2>> $tf/bwa.log") unless (-s "$sample.sai");
+		process_cmd("$BIN_DIR/bwa samse -n 10000 -s $reference $sample.sai $sample 1> $sample.sam 2>> $tf/bwa.log") unless (-s "$sample.sam");
+
+		# filter out unmapped reads
+		# filter out 2nd hits, and only keep the best hits of reads alignment to reference		
+		filter_SAM_unmapped($sample.".sam");
+		filter_SAM_2nd_hits($sample.".sam");
+
+		# sort sam to bam and generate pileup file
 		process_cmd("$BIN_DIR/samtools view -bt $reference.fai $sample.sam > $sample.bam") unless (-s "$sample.bam");
 		process_cmd("$BIN_DIR/samtools sort $sample.bam $sample.sorted") unless (-s "$sample.sorted.bam");
 		process_cmd("$BIN_DIR/samtools mpileup -f $reference $sample.sorted.bam > $sample.pre.pileup") unless (-s "$sample.pre.pileup");
 
-		#如果一个reference覆盖的区域不到其长度的某个比例，则去除这个reference所对应的所有行
+		# if coverage of any reference is lower than ratio cutoff (default : 0.3 ), remove the alignment for this reference
 		my $depth_cutoff;
 		$depth_cutoff = pileup_filter("$sample.pre.pileup", "$seq_info", "$coverage", "$sample.pileup") unless (-s "$sample.pileup");
-        
-		my $file_size = -s "$sample.pileup";	# get the size of pileup file
-		if($file_size != 0){
-			&process_cmd("java -cp $BIN_DIR extractConsensus $sample 0 40 1");	#提取连续片段（depth>=1,length>=40），文件名含有1			
-			my $result_contigs=$sample.".contigs1.fa";							#这个是corrected的序列
+		# *** notice, could rewrite this function *** 
+
+		# get the size of pileup file	
+		my $file_size = -s "$sample.pileup";
+		if($file_size != 0)
+		{
+			# get continous fragment for depth>=1 and length>=40, output file name has '1'
+			process_cmd("java -cp $BIN_DIR extractConsensus $sample 0 40 1");			
+			my $result_contigs = $sample.".contigs1.fa";			# this is a corrected sequences
 			my $count = `grep \'>\' $result_contigs | wc -l`;
-			print "@".$sample."\t".$count;										#统计得到多少序列，java程序运行后，得到的序列有可能为0
-			if($count!=0){ 														#如果$sample.contigs1.fa的序列数量不为0，改名称后转移到aligned文件夹
-				system("$BIN_DIR/renameFasta.pl --inputfile $result_contigs --outputfile $sample.contigs2.fa --prefix ALIGNED");#每条序列的名字要统一命名
-				system("mv $sample.contigs2.fa ./aligned/$sample.contigs1.fa");	#把结果文件移动到aligned文件夹
+			print "@".$sample."\t".$count;					# get seq number, this number maybe 0 after filter by JAVA
+			if($count!=0){ 							# if seq number > 0, move seq file to align folder
+				#system("$BIN_DIR/renameFasta.pl --inputfile $result_contigs --outputfile $tsample.contigs2.fa --prefix ALIGNED");# the seq name should be formatted
+				renameFasta($result_contigs, "$sample.contigs2.fa", "ALIGNED");
+				system("mv $sample.contigs2.fa $output_file");	# move the seq file to folder
 				system("rm $result_contigs");
 			}
-			else{																#如果$sample.contigs1.fa的序列数量为0，直接转移到aligned文件夹
-				system("mv $result_contigs ./aligned/$sample.contigs1.fa");		#把结果文件移动到aligned文件夹	
+			else
+			{								# if seq number = 0, move file to align folder
+				system("mv $result_contigs $output_file");	
 			}
 		}	
-		else{																	#如果文件大小是0，或者$sample.pileup不存在
-			print "@".$sample."\t0\n";											#得到0条序列
-			system("touch ./aligned/$sample.contigs1.fa");						#建立一个空的结果文件			
+		else{									# file size is 0 or sample.pileup is not exist
+			print "@".$sample."\t0\n"; 
+			system("touch $output_file");	
 		}			
 		system("rm $sample.sai");
-		system("rm $sample.pre.sam");
-		system("rm $sample.sam1");
 		system("rm $sample.sam");
 		system("rm $sample.bam");
 		system("rm $sample.sorted.bam");
 		system("rm $sample.pre.pileup");
 		system("rm $sample.pileup");	
-		system("rm bwa.log");
+		system("rm $tf/bwa.log");
 	}
 	close(IN);
 	print "###############################\n";
 	print "All the input files have been processed by $0\n";
-	#system("touch bwa-alignAndCorrect.run.finished");							#建立这个文件，表示结束标志
 }
 
 #################
 # subroutine    #
 #################
-sub process_cmd {
+sub process_cmd 
+{
 	my ($cmd) = @_;	
 	print "CMD: $cmd\n";
-	my $ret = system($cmd);	#成功就返回0，否则就失败
+	my $ret = system($cmd);	
 	if ($ret) {
 		print "Error, cmd: $cmd died with ret $ret";
 	}
 	return($ret);
 }
-sub pileup_filter {
-	my ($inputfile,$seq_info,$ratio,$outputfile) = @_;
-	open(IN1, "$seq_info" );#读入此文件中序列的长度信息
+
+sub pileup_filter 
+{
+	my ($inputfile, $seq_info, $ratio, $outputfile) = @_;
+
+	# get seq length 
+	open(IN1, "$seq_info" );
 	my %hash;
 	my @a;
 	my $id;
-	while(my $line=<IN1>){#读入length文件
+	while(my $line=<IN1>){
 		chomp($line);
 		@a= split(/\t/,$line);
-		$id=$a[0];#第1列是序列id
-		$hash{$id}=$a[1];#第2列是序列长度，存入一个hash表中
+		$id=$a[0];			# seq ID
+		$hash{$id}=$a[1];	# length
 	}
 	close IN1;
 
-	open(IN2,  "$inputfile" );
+	open(IN2, "$inputfile" );
 	open(OUT, ">$outputfile" );
 
 	my $pre_reference="a";
 	my $current_reference;
-	my $i=1;#从1开始计数，得到当前reference sequence的长度
+	my $i=1;				#从1开始计数，得到当前reference sequence的长度
 	my @data;
 	my $len_threshold=0;
 	my $line;
@@ -178,9 +197,9 @@ sub pileup_filter {
 	    $line = $_;    
 	    chomp($line);
 	    my @a = split( /\t/, $line);
-	    $current_reference= $a[0];#取当前的参考序列id
-	    $totalDepth=$totalDepth+$a[3];#累加这个文件中所有位点的depth
-	    $totalPositions=$totalPositions+1;#累加这个文件中所有位点的数量
+	    $current_reference= $a[0];			#取当前的参考序列id
+	    $totalDepth=$totalDepth+$a[3];		#累加这个文件中所有位点的depth
+	    $totalPositions=$totalPositions+1;	#累加这个文件中所有位点的数量
 	    if($current_reference eq $pre_reference){#如果当前的参考序列id与前面的相同，表示处于同一个参考序列内部
 			$i++;#@a数组的指针加1，后面会加入对应的元素	
 	    }
@@ -215,3 +234,124 @@ sub pileup_filter {
 	my $aveDepth=1.0*$totalDepth/$totalPositions;
 	return	$aveDepth;
 }
+
+=head2
+ renameFasta: rename the fasta file with spefic prefix
+=cut
+sub renameFasta
+{
+	my ($input_fasta_file, $output_fasta_file, $prefix) = @_;
+
+	my $seq_num = 0;
+	my $out = IO::File->new(">".$output_fasta_file) || die $!;
+	my $in = Bio::SeqIO->new(-format=>'fasta', -file=>$input_fasta_file);
+       	while(my $inseq = $in->next_seq)
+	{
+		$seq_num++;
+		print $out ">".$prefix.$seq_num."\n".$inseq->seq."\n";
+	}
+	$out->close;
+}
+
+
+=head2
+ filter_SAM_unmapped: filter out unmapped hit
+=cut
+sub filter_SAM_unmapped
+{
+	my $input_SAM = shift;
+	my $temp_SAM = $input_SAM.".temp";
+	my ($total_count, $filtered_count) = (0, 0);
+
+	my $in  = IO::File->new($input_SAM) || die $!;
+	my $out = IO::File->new(">".$temp_SAM) || die $!;
+	while(<$in>)
+	{
+		chomp;
+		if ($_ =~ m/^@/) { print $out $_."\n"; next; }
+		my @a = split(/\t/, $_);
+		if ( $a[1] == 4 ) { $filtered_count++; }
+		else {	print $out $_."\n"; }
+		$total_count++;	
+	}
+	$in->close;
+	$out->close;
+	process_cmd("mv $temp_SAM $input_SAM");
+	print STDERR "This program filtered $filtered_count out of $total_count reads (" . sprintf("%.2f", $filtered_count / $total_count * 100) . ") as unmapped reads, only for BWA\n";
+}
+
+=head2
+ filter_SAM_2nd_hits: filter out 2nd hits, only kept 1st hits alignment for each query id
+=cut
+sub filter_SAM_2nd_hits
+{
+	my $input_SAM = shift;
+	my $temp_SAM = $input_SAM.".temp";
+
+	my ($query_col, $opt_col) = (0, 11); 	# query and option column number for sam
+	my $max_distance = 2;			# set $max_distance for all selected hits
+	my $bestEditDist = -1;			# set best edit distance
+	my @alignment = ();			# alignment to array
+	my $pre_query_name = '';		# previous query name
+	my ($total_count, $kept_align) = (0,0);
+
+	my $in  = IO::File->new($input_SAM) || die $!;
+	my $out = IO::File->new(">".$temp_SAM) || die $!;
+	while(<$in>)
+	{
+		chomp;
+		if ($_ =~ m/^@/) { next; #print $out $_."\n"; next;
+	       	}
+		my @a = split(/\t/, $_);
+
+		my $query_name = $a[$query_col];
+
+		if ($query_name ne $pre_query_name) 
+		{
+			# parse the pre results
+			foreach my $align (@alignment)
+			{
+				my $editDistance;
+				if ($align =~ m/\tNM:i:(\d+)/) { $editDistance = $1; }	
+				else { die "Error, this alignment info do not have edit distance : $align\n"; }
+				if ($editDistance == $bestEditDist) { print $out $align."\n"; $kept_align++; }
+			}	
+
+			# init vars;
+			@alignment = ();
+			$bestEditDist = -1;
+			$pre_query_name = $query_name;
+		}
+
+		my $distance;
+		if ($_ =~ /\tNM:i:(\d+)/) { $distance = $1; }
+		else { die "Error, this alignment info do not have edit distance : $_\n"; }
+		next if $distance >= $max_distance;
+		if ($bestEditDist == -1) { $bestEditDist = $distance; }
+		if ($distance < $bestEditDist) { $bestEditDist = $distance; }	
+		push (@alignment, $_);
+
+		$total_count++;	
+	}
+	$in->close;
+
+	# parse final query recoed
+	if (scalar(@alignment) > 0) 
+	{
+ 		foreach my $align (@alignment)
+		{
+			my $editDistance;
+			if ($align =~ m/\tNM:i:(\d+)/) { $editDistance = $1; }	
+			else { die "Error, this alignment info do not have edit distance : $align\n"; }
+			if ($editDistance == $bestEditDist) { print $out $align."\n"; $kept_align++; }
+		}	
+	}
+
+	$out->close;
+
+	process_cmd("mv $temp_SAM $input_SAM");
+	my $filtered_count = $total_count - $kept_align;
+	print STDERR "This program filtered $filtered_count out of $total_count reads (" . sprintf("%.2f", $filtered_count / $total_count * 100) . ") as 2ndhits reads, only for BWA\n";
+}
+
+

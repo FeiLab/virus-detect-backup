@@ -45,8 +45,8 @@ our $thread_num = 8;
 ################################
 our $WORKING_DIR	= cwd();				# current folder
 our $DATABASE_DIR 	= ${FindBin::RealBin}."/../databases";	# database folder
-our $BIN_DIR 		= ${FindBin::RealBin};			# programs folder
-
+our $BIN_DIR 		= ${FindBin::RealBin};			# script folder
+our $tf			= $WORKING_DIR."/temp";			# temp folder;
 ##################
 # get input para #
 ##################
@@ -63,14 +63,11 @@ GetOptions(
 
 die $usage unless ($file_list && $reference);	# required parameters
 
-$index_name = basename($reference);		# remove the path 
-#$index_name =~ s/\.\S*$//;			# remove the suffix
-
 # main
 main: {
 
 	# creat bwa index for reference
-	process_cmd("$BIN_DIR/bwa index -p $DATABASE_DIR/$index_name -a bwtsw $reference 2> bwa.log") unless (-e "$DATABASE_DIR/$index_name.amb");
+	process_cmd("$BIN_DIR/bwa index -p $reference -a bwtsw $reference 2> $tf/bwa.log") unless (-e "$reference.amb");
 
 	my $sample;
 	my $i=0;
@@ -82,18 +79,19 @@ main: {
 		print "#processing sample $i by $0: $sample\n";
 
 		# command lines		
-		process_cmd("$BIN_DIR/bwa aln -n $max_dist -o $max_open -e $max_extension -i 0 -l $len_seed -k $dist_seed -t $thread_num $DATABASE_DIR/$index_name $sample 1> $sample.sai 2>bwa.log") unless (-s "$sample.sai");
-		process_cmd("$BIN_DIR/bwa samse -n 1 $DATABASE_DIR/$index_name $sample.sai $sample 1> $sample.pre.sam 2>bwa.log") unless (-s "$sample.pre.sam");				
-		process_cmd("$BIN_DIR/SAM_filter_out_unmapped_reads.pl $sample.pre.sam $sample.unmapped $sample.mapped > $sample.sam") unless (-s "$sample.sam");
+		process_cmd("$BIN_DIR/bwa aln -n $max_dist -o $max_open -e $max_extension -i 0 -l $len_seed -k $dist_seed -t $thread_num $reference $sample 1> $sample.sai 2>$tf/bwa.log") unless (-s "$sample.sai");
+		process_cmd("$BIN_DIR/bwa samse -n 1 $reference $sample.sai $sample 1> $sample.sam 2>$tf/bwa.log") unless (-s "$sample.sam");
+
+		# generate unmapped reads
+		generate_unmapped_reads("$sample.sam", "$sample.unmapped");
+
+		# remove temp file for read alignment
 		system("rm $sample.sai");
-		system("rm $sample.pre.sam");
 		system("rm $sample.sam");
-		system("rm $sample.mapped");
 	}
         close(IN);
 	print "###############################\n";
 	print "All the input files have been processed by $0\n";
-	#system("touch $index_name.remove.run.finished");	# create finished sign
 }
 
 # subroutine
@@ -106,3 +104,23 @@ sub process_cmd {
 	}
 	return($ret);
 }
+
+sub generate_unmapped_reads
+{
+	my ($input_SAM, $output_reads) = @_;
+
+	my $in  = IO::File->new($input_SAM) || die $!;
+	my $out = IO::File->new(">".$output_reads) || die $!;
+	while(<$in>)
+	{
+		chomp;
+		if ($_ =~ m/^@/) { next; }
+		my @a = split(/\t/, $_);
+		if ( $a[1] == 4 ) { 
+		       print $out "\@$a[0]\n$a[9]\n+\n$a[10]\n";
+		}
+	}
+	$in->close;
+	$out->close;
+}
+

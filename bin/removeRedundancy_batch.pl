@@ -2,8 +2,10 @@
 use strict;
 use warnings;
 use Getopt::Long;
+use FindBin;
+use Bio::SeqIO;
 use Cwd;
-#先通过多次循环去冗余，然后再做base correction
+
 my $usage = <<_EOUSAGE_;
 
 #########################################################################################################
@@ -31,147 +33,256 @@ _EOUSAGE_
 	;
 	
 #################
-##   全局变量  ##
+##   global    ##
 #################
-our $file_list;		#包括所有待处理的样本的文本文件名称（无后缀）
-our $file_type;		#输入文件的类型，当前只支持fastq和fasta格式
-our $input_suffix;	#输入文件的后缀名称
-our $contig_type; 	#contig类型，决定了输出文件夹是aligned还是assembled
-our $contig_prefix;	#fasta文件改名时，每条记录用到的前缀
+# parameters for input files
+our $file_list;		# list of input file name for virus detection
+our $file_type;		# fastq or fasta
+our $input_suffix;	# suffix file name : contigs1.fa
+our $contig_type; 	# contig type : aligned还是assembled
+our $contig_prefix;	# fasta 文件改名时，每条记录用到的前缀
 
-our $strand_specific;	#专门用于strand specific转录组
-our $min_overlap = 30;	#hsp合并时，最短的overlap
-our $max_end_clip = 6; 	#hsp合并时，两端允许的最小clip
-our $cpu_num = 8;          #megablast使用的cpu数目
-our $mis_penalty = -1;     #megablast中，对错配的罚分，必须是负整数
-our $gap_cost = 2;         #megablast中，对gap open的罚分，必须是正整数
-our $gap_extension = 1;    #megablast中，对gap open的罚分，必须是正整数
+# parameters for megablast (remove redundancy)
+our $strand_specific;	#
+our $min_overlap = 30;	# hsp combine
+our $max_end_clip = 6; 	# hsp combine
+our $cpu_num = 8;	# megablast: thread
+our $mis_penalty = -1;	# megablast: penalty for mismatch
+our $gap_cost = 2;	# megablast: penalty for gap open
+our $gap_extension = 1;	# megablast: penalty for gap extension
+
 ################################
-##   设置所有目录和文件的路径 ##
+# set path for file and folders#
 ################################
-our $WORKING_DIR=cwd();#工作目录就是当前目录
-our $DATABASE_DIR=$WORKING_DIR."/databases";#所有数据库文件所在的目录
-our $BIN_DIR=$WORKING_DIR."/bin";#所有可执行文件所在的目录
-our $CONTIG_DIR;#指定的病毒contig所在的目录
+our $WORKING_DIR	= cwd();				# current folder
+our $DATABASE_DIR	= ${FindBin::RealBin}."/../databases";	# database folder
+our $BIN_DIR		= ${FindBin::RealBin};			# program folder
+our $TEMP_DIR 		= $WORKING_DIR."/temp";			# temp folder
+my $tf = $TEMP_DIR;						# short name of temp folder
 
 #################
-## 程序参数处理##
+# parameters	#
 #################
-&GetOptions( 'file_list=s' => \$file_list,
-	'file_type=s' => \$file_type,
-	'input_suffix=s' => \$input_suffix,
-	'contig_type=s' => \$contig_type,
-	'contig_prefix=s' => \$contig_prefix,
-	'strand_specific!' => \$strand_specific,
-	'min_overlap=i' => \$min_overlap,
-	'max_end_clip=i' => \$max_end_clip,
-	'cpu_num=i' => \$cpu_num,
-	'mis_penalty=i' => \$mis_penalty,
-	'gap_cost=i' => \$gap_cost,
-	'gap_extension=i' => \$gap_extension			 			 
-			 );
+GetOptions( 
+	'file_list=s'		=> \$file_list,
+	'file_type=s' 		=> \$file_type,
+	'input_suffix=s' 	=> \$input_suffix,
+	'contig_type=s' 	=> \$contig_type,
+	'contig_prefix=s' 	=> \$contig_prefix,
+
+	'strand_specific!' 	=> \$strand_specific,
+	'min_overlap=i' 	=> \$min_overlap,
+	'max_end_clip=i' 	=> \$max_end_clip,
+	'cpu_num=i' 		=> \$cpu_num,
+	'mis_penalty=i' 	=> \$mis_penalty,
+	'gap_cost=i' 		=> \$gap_cost,
+	'gap_extension=i' 	=> \$gap_extension			 			 
+);
 			 
-die $usage unless ($file_list && $input_suffix && $contig_type && $contig_prefix);	# required parameters
+die $usage unless ($file_list && $input_suffix && $contig_prefix);	# required parameters
 
-$CONTIG_DIR=$WORKING_DIR."/$contig_type";
 #################
-##  主程序开始 ##
+# main 		#
 #################
 open(IN1,$file_list) || die "Can't open the file $file_list\n";
-my $sample;
-my $j=0;
+my ($j, $sample, $contig_file);
+$j=0;
 while(<IN1>){
 	$j=$j+1;
 	chomp;
-	$sample=$_; #每次循环读入一行，后续代码都是处理该样本文件（名称无后缀）。
+	$sample = $_;
 	print "#processing sample $j by $0: $sample\n";
-	
-	# get aligned files size, and mv the blank file to corresponding contig type file	
-	my $file_size= -s "$CONTIG_DIR/$sample.$input_suffix";
-	if($file_size==0){
-		system ("mv $CONTIG_DIR/$sample.$input_suffix $CONTIG_DIR/$sample.$contig_type.fa");
-		next;
-	}
+	$contig_file = $sample.".".$input_suffix;
 
-	#否则，移动到当前目录来去冗余
-	system ("$BIN_DIR/dust $CONTIG_DIR/$sample.$input_suffix 1> $sample.masked 2> dust.log");#首先mask简单重复序列
-	system ("$BIN_DIR/trim_XNseq1.pl $sample.masked $CONTIG_DIR/$sample.$input_suffix 0.8 40 > $sample.$input_suffix");
+	# get aligned files size, do not remove redundancy if file size is 0
+	my $file_size = -s "$contig_file";
+	next if $file_size == 0;
+
+	# if file has sequence, move it to temp folder to remove redundancy
+	# 1. remove simple repeate sequence using mask
+	system ("$BIN_DIR/dust $sample.$input_suffix 1> $sample.masked 2> $tf/dust.log");
+	system ("$BIN_DIR/trim_XNseq1.pl $sample.masked $sample.$input_suffix 0.8 40 > $sample.$input_suffix.1");
 	system ("rm $sample.masked");
-	system ("rm $CONTIG_DIR/$sample.$input_suffix");
-	my $contig_num1 =  `grep \'>\' $sample.$input_suffix | wc -l `;#首先得到去冗余前的序列总数
-	chomp($contig_num1);
-	my $contig_num2 = 0;#此变量保存每轮去除冗余后的序列总数	
-	my @a= split(/\./,$input_suffix);
-	my ($i)= $a[0] =~ /(\d+)/;#提取contigs开始的编号,默认是1
+
+	my ($before_contig_num, $after_contig_num, $i);
+	$i = 1;								# get the number of contig file, default is 1
+	$before_contig_num = `grep -c \'>\' $sample.$input_suffix.$i`;	# get the seq number before remove redundancy
+	$after_contig_num  = 0;						# this is seq number after remove redundancy	
 	
-	
-	while($contig_num2!=$contig_num1)#如果新contigs数量不等于旧数量，继续计算，直到不变为止
+	# if the new contig number != old contig number, continue remove redundancy
+	while( $after_contig_num != $before_contig_num )
 	{
-		process_cmd ("$BIN_DIR/removeRedundancy.pl --input $sample.contigs$i.fa --min_overlap $min_overlap --max_end_clip $max_end_clip --cpu_num $cpu_num --mis_penalty $mis_penalty --gap_cost $gap_cost --gap_extension $gap_extension");		
-		process_cmd("rm $sample.contigs$i.fa");#删除旧文件
+		# the default output is the input_inset; 
+		process_cmd ("$BIN_DIR/removeRedundancy.pl --input $sample.$input_suffix.$i --min_overlap $min_overlap --max_end_clip $max_end_clip --cpu_num $cpu_num --mis_penalty $mis_penalty --gap_cost $gap_cost --gap_extension $gap_extension");
+		process_cmd("rm $sample.$input_suffix.$i");# rm old file
+		my $remove_redundancy_result = "$sample.$input_suffix.$i"."_inset";
+
 		$i++;
-		$contig_num1=$contig_num2;#更新contig_num1
-		#更新contig_num2
-		$contig_num2 =  `grep \'>\' inset | wc -l `;#校正后生成的contigs
-		chomp($contig_num2);	
-              	system ("mv inset $sample.contigs$i.fa");	
+		$before_contig_num = $after_contig_num; # renew contig_num1
+		# renew contig_num2
+		$after_contig_num =  `grep -c \'>\' $remove_redundancy_result`; # get seq number of new contig
+		chomp($after_contig_num);
+              	system ("mv $remove_redundancy_result $sample.$input_suffix.$i");	
 	}
 
-	#去冗余完毕，开始进行base correction
-	my $sample_reference= $sample.".contigs$i.fa";	# sample_reference file after remove Redundancy 
-	my $sample_reads= $sample;			# read file, need to re-aligned to sample_reference file	
+	# finish remove redundancy, next for base correction
+	my $sample_reference = "$sample.$input_suffix.$i";	# sample_reference file after remove Redundancy 
+	my $sample_reads     = $sample;				# read file, need to re-aligned to sample_reference file	
 
 	#aligment -> sam -> bam -> sorted bam -> pileup
-	my $format="-q"; if ($file_type eq "fasta") {$format="-f"};
-	&process_cmd("$BIN_DIR/bowtie-build --quiet -f $sample_reference $sample") unless (-e "$sample.1.amb");
-	&process_cmd("$BIN_DIR/samtools faidx $sample_reference") unless (-e "$sample_reference.fai");
-	&process_cmd("$BIN_DIR/bowtie --quiet $sample -v 1 -p $cpu_num $format $sample -S -a --best $sample.sam") unless (-s "$sample.sam");
-	&process_cmd("$BIN_DIR/samtools view -bt $sample_reference.fai $sample.sam > $sample.bam") unless (-s "$sample.bam");
-	&process_cmd("$BIN_DIR/samtools sort $sample.bam $sample.sorted") unless (-s "$sample.sorted.bam");
-	&process_cmd("$BIN_DIR/samtools mpileup -f $sample_reference $sample.sorted.bam > $sample.pileup") unless (-s "$sample.pileup");	
+	my $format = "-q"; if ($file_type eq "fasta") {$format="-f"};
+	process_cmd("$BIN_DIR/bowtie-build --quiet -f $sample_reference $sample") unless (-e "$sample.1.amb");
+	process_cmd("$BIN_DIR/samtools faidx $sample_reference") unless (-e "$sample_reference.fai");
+	process_cmd("$BIN_DIR/bowtie --quiet $sample -v 1 -p $cpu_num $format $sample -S -a --best $sample.sam") unless (-s "$sample.sam");
+	process_cmd("$BIN_DIR/samtools view -bt $sample_reference.fai $sample.sam > $sample.bam") unless (-s "$sample.bam");
+	process_cmd("$BIN_DIR/samtools sort $sample.bam $sample.sorted") unless (-s "$sample.sorted.bam");
+	process_cmd("$BIN_DIR/samtools mpileup -f $sample_reference $sample.sorted.bam > $sample.pileup") unless (-s "$sample.pileup");	
 
-	$file_size= -s "$sample.pileup";#根据pileup文件大小是不是0，进入下面处理流程
-	if($file_size==0){#如果文件大小是0，需要建立一个空文件，然后跳出循环
-		system ("touch $CONTIG_DIR/$sample.$contig_type.fa");
+	$file_size = -s "$sample.pileup";		# get file size
+	if( $file_size == 0 ){				# if file size = 0, create blank file, and exit the loop
+		system ("touch $sample.$input_suffix");
 		next;
 	}
 
-	#否则继续下面处理
 	$i++;
-	&process_cmd("java -cp $BIN_DIR extractConsensus $sample 1 40 $i");
-	system("$BIN_DIR/renameFasta.pl --inputfile $sample.contigs$i.fa --outputfile contigs --prefix $contig_prefix");#每条序列的名字要统一命名以去除重复
-	system ("mv contigs $CONTIG_DIR/$sample.$contig_type.fa");#去冗余得到的最终文件转回到$CONTIG_DIR目录
-	#删除本次循环中产生的中间文件
+	process_cmd("java -cp $BIN_DIR extractConsensus $sample 1 40 $i");
+	renameFasta("$sample.contigs$i.fa", "$sample.$input_suffix", $contig_prefix);
+
+	# remove temp files
 	system("rm $sample.sam");
 	system("rm $sample.bam");
 	system("rm $sample.sorted.bam");
-	system("rm $sample.pileup");#每次必须删除，否则下次不能继续
+	system("rm $sample.pileup"); # must delete this file for next cycle remove redundancy
 	system("rm $sample_reference");
 	system("rm $sample_reference.fai");
-	system("rm *.ebwt");
+	system("rm $tf/*.ebwt");
 	system("rm $sample.contigs$i.fa");	
 }
 close(IN1);
 print "###############################\n";
 print "All the samples have been processed by $0\n";
 
-system("touch removeRedundancy_batch.$contig_type.finished");#建立这个文件，表示结束标志
-system("rm tem.*");
-system("rm tem");
-system("rm *.log");
-system("rm restset");
-system("rm query");
-
+#system("rm *.log");
 
 #################
-##    子程序   ##
+# subroutine	#
 #################
 sub process_cmd {
 	my ($cmd) = @_;	
 	print "CMD: $cmd\n";
-	my $ret = system($cmd);	#成功就返回0，否则就失败
+	my $ret = system($cmd);
 	if ($ret) {
 		print "Error, cmd: $cmd died with ret $ret";
 	}
 	return($ret);
 }
+
+=head2
+ renameFasta: rename the fasta file with spefic prefix
+=cut
+sub renameFasta
+{
+	my ($input_fasta_file, $output_fasta_file, $prefix) = @_;
+
+	my $seq_num = 0;
+	my $out = IO::File->new(">".$output_fasta_file) || die $!;
+	my $in = Bio::SeqIO->new(-format=>'fasta', -file=>$input_fasta_file);
+       	while(my $inseq = $in->next_seq)
+	{
+		$seq_num++;
+		print $out ">".$prefix.$seq_num."\n".$inseq->seq."\n";
+	}
+	$out->close;
+}
+
+=head
+our $max_Xratio = 80/100; 
+our $min_BaseNum = 40; 
+#将fasta文件中的所有序列满足，[XxNn]碱基比例小于一个ratio，或者非[XxNn]碱基总数大于一个绝对值的序列输出到output
+ 
+if (@ARGV < 2)
+{
+  print "usage: trm_XNseq1.pl input1 input2 max_Xratio min_BaseNum > output\n";
+  exit(0);
+}
+
+our $input1 = $ARGV[0];
+our $input2 = $ARGV[1];
+$max_Xratio = $ARGV[2];
+$min_BaseNum = $ARGV[3];
+
+my %seq_required;
+my ($pre_name, $seq) = ('', ''); 
+open(IN1, "$input1");
+while (<IN1>) {
+	if (/^>(\S+)/) {
+		my $current_name = $1; 
+		if ($pre_name ne '') {
+			my $is_out = 1; #表示该序列应该输出，这个变量调试用
+			$seq =~ s/\s//g; 
+			my $xnnum = ($seq =~ tr/XxNn/XxNn/); #得到非4种常见碱基[XxNn]的碱基总数
+			my $seqlen = length($seq); 
+			if ($xnnum/$seqlen >= $max_Xratio) {#[XxNn]碱基比例大于一个ratio
+				$is_out = 0; #表示该序列不应该输出
+			}elsif ($seqlen-$xnnum < $min_BaseNum) {#或者[ATCG]碱基总数不够一定数量
+				$is_out = 0; #表示该序列不应该输出
+			}else{
+				#$seq =~ s/(.{50})/$1\n/g; chomp($seq); 
+				#print ">$pre_name\n$seq\n"; #都不满足的就输出到标准输出
+				defined $seq_required{$pre_name} or $seq_required{$pre_name} = 1;#建立query和query_length之间的映射
+			}
+			#$is_out == 0 and warn "[Record] [$pre_name] dropped.\n"; #调试用
+		}
+		$pre_name=$current_name; $seq = ''; 
+	}else{
+		$seq .= $_; 
+	}
+}
+#不要忘记处理剩下的
+if ($pre_name ne '') {
+	my $is_out = 1; 
+	$seq =~ s/\s//g; 
+	my $xnnum = ($seq =~ tr/XxNn/XxNn/);
+	my $seqlen = length($seq);
+	if ($xnnum/$seqlen >= $max_Xratio) {
+		$is_out = 0;
+	}elsif ($seqlen-$xnnum < $min_BaseNum) {
+		$is_out = 0;
+	}else{
+		#$seq =~ s/(.{50})/$1\n/g; chomp($seq); 
+		#print ">$pre_name\n$seq\n"; #都不满足的就输出到标准输出
+		defined $seq_required{$pre_name} or $seq_required{$pre_name} = 1;#建立query和query_length之间的映射
+	}
+	#$is_out == 0 and warn "[Record] [$pre_name] dropped.\n"; 
+}
+close(IN1);
+
+#从input2中把在%seq_required中的序列提取出来
+open(IN2, $input2);
+
+my $flag = "off";
+while(<IN2>) {
+	if($_ =~ m/^>/) {
+		my $head = $_;
+		chomp($head);
+		$head=~s/>//;
+
+		if(defined $seq_required{$head}) {#如果包括这个name
+			print $_;#就输出
+			$flag = "on";#同时改变标志，表示后面的序列需要继续向OUT1输出
+		}
+		else {#如果不包括这个name
+			#print OUT $_;#就输出到OUT
+			$flag = "off";#同时改变标志，表示后面的序列需要继续向OUT2输出
+		}
+	}
+	else {
+		if($flag eq "on") {#表示为"on"
+			print $_;#后面的序列需要继续输出
+		}
+	}
+}
+close(IN2);
+=cut
+
+

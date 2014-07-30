@@ -1,7 +1,5 @@
 #!/usr/bin/perl -w 
-
 use strict; 
-
 # 来自blast_parse_table2.pl程序的输出
 # query_name	query_length	hit_name	hit_length	hsp_length	identity	evalue	score	strand	query_start	query_end	hit_start	hit_end
 # 其中0、1、9、10是必须的
@@ -10,7 +8,6 @@ use strict;
 # 把query被覆盖超过一定ratio的记录下来，然后从一个fasta文件中提取记录中不包括的相应序列，输出到output1
 # 剩下的序列的名称输出到ouput2
 # 如果hit都是病毒，可以用这个ratio来判断所得到contig是不是病毒
-
 if (@ARGV < 2)
 {
   print "usage: query_filter1.pl inputfile1 inputfile2 output1 identity min_ratio > output2\n";

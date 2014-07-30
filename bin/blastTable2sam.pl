@@ -4,8 +4,8 @@ use strict;
 use warnings;
 use Getopt::Std;
 
+# convert blast output to SAM format
 
-#把blast得到的paired结果文件转为sam文件类型
 if (@ARGV ==0)
 {
   print "usage: blast2sam.pl input > output\n";

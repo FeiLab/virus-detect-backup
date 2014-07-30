@@ -9,13 +9,13 @@ if (@ARGV < 4)
   exit(0);
 }
 
-our $input1 = $ARGV[0]; #第一个循环处理这个文件，并选择几列输出到html文件(总的报告文件)，包括指向下面文件的链接
-our $input2 = $ARGV[1]; #这个文件用于生成每条参考序列自己的html文件（含可视化的图形）
-our $output = $ARGV[2]; # 相对于工作目录的输出目录
+our $input1 = $ARGV[0]; # 第一个循环处理这个文件，并选择几列输出到html文件(总的报告文件)，包括指向下面文件的链接
+our $input2 = $ARGV[1]; # 这个文件用于生成每条参考序列自己的html文件（含可视化的图形）
+our $output = $ARGV[2]; # 
 our $type = $ARGV[3]; #
 our $WORKING_DIR=cwd();#工作目录就是当前目录
-our $OUTPUT_DIR = $WORKING_DIR."/$output/$type"."_references"; # 相对于工作目录的输出目录，注意这个目录必须提前创建，否则程序出错
-our $output_file = $WORKING_DIR."/$output/$output.$type.html"; # 相对于工作目录的输出目录，是总文件
+our $OUTPUT_DIR =  "$output/$type"."_references"; # 相对于工作目录的输出目录，注意这个目录必须提前创建，否则程序出错
+our $output_file = "$output/$type.html"; # 相对于工作目录的输出目录，是总文件
 
 my %all_hits;
 my %out;

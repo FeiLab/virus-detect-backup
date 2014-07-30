@@ -1,9 +1,13 @@
-#!/usr/bin/perl -w 
-#findRedundancy(),提取一个query对应的所有hit的所有hsp
+#!/usr/bin/perl 
+
 use strict; 
+use warnings;
 use IO::File; 
-use Getopt::Long; #这个模块可以接受完整参数
+use Bio::SeqIO;
+use Getopt::Long;
+use FindBin;
 use Cwd;
+
 my $usage = <<_EOUSAGE_;
 
 #########################################################################################
@@ -25,91 +29,106 @@ my $usage = <<_EOUSAGE_;
 _EOUSAGE_
 	;
 #################
-##   全局变量  ##
+## global vars ##
 #################	
-our $input;            #需要处理的文件
-our $strand_specific;  #专门用于strand specific转录组
-our $min_overlap = 30; #hsp合并时，最短的overlap
-our $max_end_clip = 4; #hsp合并时，两端允许的最小clip
-our $min_identity;     #hsp合并需要满足的最小identity，随hsp长度而调整
+our $input;			# input file fasta format
+our $strand_specific;		# 专门用于strand specific转录组
+our $min_overlap = 30;		# hsp合并时，最短的overlap
+our $max_end_clip = 4;		# hsp合并时，两端允许的最小clip
+our $min_identity;		# hsp合并需要满足的最小identity，随hsp长度而调整
 
-our $filter_query = "F";     #默认不需要去除简单序列
+our $filter_query = "F";	# 默认不需要去除简单序列
 our $word_size = int($min_overlap/3);
-our $cpu_num = 8;          #megablast使用的cpu数目
-our $hits_return = 10;     #megablast返回的hit数目，这个不需要用户设定
-our $mis_penalty = -1;     #megablast中，对错配的罚分，必须是负整数
-our $gap_cost = 2;         #megablast中，对gap open的罚分，必须是正整数
-our $gap_extension = 1;    #megablast中，对gap open的罚分，必须是正整数
+our $cpu_num = 8;		# megablast使用的cpu数目
+our $hits_return = 10;		# megablast返回的hit数目，这个不需要用户设定
+our $mis_penalty = -1;		# megablast中，对错配的罚分，必须是负整数
+our $gap_cost = 2;		# megablast中，对gap open的罚分，必须是正整数
+our $gap_extension = 1;		# megablast中，对gap open的罚分，必须是正整数
 
 ################################
 ##   设置所有目录和文件的路径 ##
 ################################
-our $WORKING_DIR=cwd();#工作目录就是当前目录
-our $BIN_DIR=$WORKING_DIR."/bin";#所有可执行文件所在的目录
+our $WORKING_DIR=cwd();			#工作目录就是当前目录
+our $BIN_DIR=${FindBin::RealBin};	#所有可执行文件所在的目录
 
 ##################
 ## 程序参数处理 ##
 ##################
-&GetOptions( 'input=s' => \$input, 
-	'strand_specific!' => \$strand_specific,
-	'min_overlap=i' => \$min_overlap,
-	'max_end_clip=i' => \$max_end_clip,
-	'cpu_num=i' => \$cpu_num ,
-	'mis_penalty=i' => \$mis_penalty,
-	'gap_cost=i' => \$gap_cost,
-	'gap_extension=i' => \$gap_extension											 
-			 );
-unless ($input) {#这个参数通过输入得到
-die $usage;}
+&GetOptions( 
+	'input=s' 		=> \$input, 
+	'strand_specific!'	=> \$strand_specific,
+	'min_overlap=i' 	=> \$min_overlap,
+	'max_end_clip=i' 	=> \$max_end_clip,
+	'cpu_num=i' 		=> \$cpu_num ,
+	'mis_penalty=i' 	=> \$mis_penalty,
+	'gap_cost=i' 		=> \$gap_cost,
+	'gap_extension=i' 	=> \$gap_extension
+);
+
+die $usage unless $input;	# required parameter
 			 
 #################
-##  主程序开始 ##
+##  main       ##
 #################
-			 
-my (@all_data, $name, $sequence); 
-$name = ''; $sequence = ''; 
 
-open(IN, "$input");
-while (<IN>) {
-	chomp; 
-	s/\s+$//; 
-	if (/^>(\S+)/) {
-		my $tk = $1; 
-		if ($name ne '') {#如果已经读入了序列名称（即前一次的），这样可以排除第一次（前一次为空）情况
-			$sequence =~ s/\s//g; #去掉sequence中的空字符
-			push(@all_data, [$name, length($sequence), $sequence]);
-		}
-		$name = $tk; #开始读入一条新序列，首先读入序列名称
-		$sequence = ''; #并清空序列
-	}else{
-		$sequence .= $_; 
-	}
+# create array for store sequence info
+# [    Seq1     ,      Seq2     ,      Seq3    ]
+# [ID, Len, Seq], [ID, Len, Seq], [ID, Len, Seq]
+my @all_data; 
+my $in = Bio::SeqIO->new(-format=>'fasta', -file=>$input);
+while(my $inseq = $in->next_seq)
+{
+	push(@all_data, [$inseq->id, $inseq->length, $inseq->seq]);
 }
-close(IN);
+@all_data = sort { -1*($a->[1] <=> $b->[1]) } @all_data; # sort data of @all_data by seq length
 
-if ($name ne '') { #最后一次读入的fasta数据，存入数组
-	$sequence =~ s/\s//g;
-	push(@all_data, [$name, length($sequence), $sequence]); 
-}
-my %inset;  #用于存储非冗余序列，这样会再次存储@all_data中的序列，应该改进为只保存index
-my $restset = ''; #用于存储冗余序列，这些数据的保存仅为了校对用
-@all_data = sort { -1*($a->[1] <=> $b->[1]) } @all_data; #@all_data中数据按照序列长度降序排序
+# put un-redundancy sequence to hash : inset
+# key: seqID
+# value: sequence
+#
+# put redundancy sequnece to vars : restset
+# fasta format
+# >seqID \n sequence \n
+# 
+# contig_conunt : inset set number
+my %inset;
+my $restset = ''; 
+my $contig_count=1;
 
-my $contig_count=1; 
-for my $tr (@all_data) {
-	if (scalar(keys %inset)  == 0) {#第一次把最长的序列先放入inset集合
+for my $tr (@all_data) 
+{
+	if (scalar(keys %inset)  == 0) 
+	{
+		# put the longest sequence to hash
 		$inset{$tr->[0]} = $tr->[2]; 
-	}else{
-		my $query = ">$tr->[0]\n$tr->[2]\n"; 
-		my $return_string = &ifRedundant(\%inset, \$query);
-		my @return_col = split(/\t/, $return_string);#第1列是name，第2列是r或n，或是合并后序列
-		if ($return_col[1] eq "r") {#如果query是完全冗余，扔掉
-			$restset .= $query;
-		}elsif($return_col[1] eq "n"){#如果query是非冗余，包括进来
+	}
+	else
+	{
+		my $query = ">$tr->[0]\n$tr->[2]\n";
+
+		# gene redundancy stat between query and %inset sequences  
+		# return_string is tab delimit file
+		# 1. seqID
+		# 2. r or n, then combine the sequence according to r and n
+		my $return_string = ifRedundant(\%inset, \$query);
+		my @return_col = split(/\t/, $return_string);
+
+		if ($return_col[1] eq "r") 
+		{
+			# remove redundancy sequence
+			$restset.=$query;
+		}
+		elsif ( $return_col[1] eq "n")
+		{
+			# add un-redundancy sequence to hash
 			$contig_count++;
 			$inset{$tr->[0]} = $tr->[2]; 
 		}
-		else{#如果query是部分冗余，合并后替换
+		else
+		{
+			# partily redundancy , combine then replace
+			# the format return_string is different
+			# 1. hit_name:query_name 
 			my @names = split(/\:/, $return_col[0]);#第一列是(hit_name:query_name)		
 			$inset{$names[0]} = $return_col[1];; #原来hit_name对应的记录被新序列覆盖
 			$restset .= $query;
@@ -117,68 +136,84 @@ for my $tr (@all_data) {
 	}
 }
 
-open(OUT1, ">inset");#将所有非冗余序列输出
-while (my ($k,$v) = each %inset) {
-	print OUT1 ">$k\n$v\n"; 
-}
-close(OUT1); 
+# output results
+my $uniq_seq_file = $input."_inset";
+my $redundancy_seq_file = $input."_restset";
 
-open(OUT2, ">restset");#将所有冗余序列输出
-print OUT2 $restset; 
-close(OUT2);
+my $out1 = IO::File->new(">".$uniq_seq_file) || die $!; 
+while (my ($k,$v) = each %inset) { print $out1 ">$k\n$v\n";  }
+$out1->close; 
+
+my $out2 = IO::File->new(">".$redundancy_seq_file) || die $!;
+print $out2 $restset; 
+$out2->close;
 
 print "@@\t".$input."\t".$contig_count."\n";
 
 
 #######################
-##     子程序开始    ##
+##     subroutine    ##
 #######################
-sub ifRedundant {
+=head2
+
+ ifRedundant: check if the query sequence is redundancy after compared with inset sequences 
+
+=cut
+sub ifRedundant 
+{
 	my ($inset, $query) = @_; 
 	
-	#保存所有被查询序列到文件tem
-	open(OUT, ">tem");
-	while (my ($k,$v) = each %$inset) {
-	print OUT ">$k\n$v\n"; 
-	}
-	close(OUT);
+	# save query and hit seqeunces to files
+	my $query_seq_file = $input."_query";
+	my $hit_seq_file   = $input."_tem";
+	my $blast_output   = $input."_tem.paired";
+
+	my $fh1 = IO::File->new(">".$query_seq_file) || die $!;
+	print $fh1 $$query;
+	$fh1->close;
 	
-	#保存查询序列到文件query
-	open(OUT, ">query");
-	print OUT $$query; 
-	close(OUT);
+	my $fh2 = IO::File->new(">".$hit_seq_file) || die $!;
+	while (my ($k,$v) = each %$inset) { print $fh2 ">$k\n$v\n"; }
+	$fh2->close;
 	
-    #执行blast，如果需要调试输出就用process_cmd()
-	system("$BIN_DIR/formatdb -i tem -p F");#tem是inset文件里面的所有序列	
+    	# perform blast. 
+	# using process_cmd() could debug ouput result
+	system("$BIN_DIR/formatdb -i $hit_seq_file -p F");
 	my $blast_program = $BIN_DIR."/megablast";
-	#my $blast_param = "-i query -d tem -o tem.paired -F F -a 8 -W $word_size -q -1 -G 2 -E 1 -b 5";
-	my $blast_param = "-i query -d tem -o tem.paired -F $filter_query -a $cpu_num -W $word_size -q $mis_penalty -G $gap_cost -E $gap_extension -b $hits_return";
-	if ($strand_specific)
-	{
-		$blast_param .= " -S 1";
-	}
-	system($blast_program." ".$blast_param);
+	my $blast_param = "-i $query_seq_file -d $hit_seq_file -o $blast_output -F $filter_query -a $cpu_num -W $word_size -q $mis_penalty -G $gap_cost -E $gap_extension -b $hits_return";
+	if ($strand_specific) { $blast_param .= " -S 1"; }
+	system($blast_program." ".$blast_param) && die "Error at blast command: $blast_param\n";
 	
-	#从blast结果中找到redundant信息
-	my $result = findRedundancy($inset, $query);
-#   if($$query =~ />NOVEL1\n/){#调试用
-#	    print STDERR $result."good\n";
-#		die "this is >NOVEL1";
-#	}
+	# get redundancy info from blast result
+	my $result = findRedundancy($inset, $query, $blast_output);
+
+	#   if($$query =~ />NOVEL1\n/){#调试用
+	#	    print STDERR $result."good\n";
+	#		die "this is >NOVEL1";
+	#	}
+	
+	unlink ($query_seq_file, $hit_seq_file, $blast_output, "$hit_seq_file.nhr", "$hit_seq_file.nin", "$hit_seq_file.nsq");
 	return $result;
 }
 
+=head2
+
+ findRedundancy : get all HSP for one query against multiply hits
+
+=cut
 sub findRedundancy
 {
-	my ($inset, $query) = @_;	
+	my ($inset, $query, $blast_output) = @_;
+
 	my ($query_name, $query_length, $hit_name, $hit_length, $hsp_length, $identity, $evalue, $score, $strand, $query_start, $query_end, $hit_start, $hit_end, $query_to_end, $hit_to_end);
+
 	my %hsp = ();  #存储提取一个query的所有hsp，最后一起处理
 	my $hsp_count=0; 
 	my $query_sequenc; 
 	my $subject_sequenc; 	
 	my $is_hsp = 1;
 
-	my $bfh = IO::File->new("tem.paired") || "Can not open blast result file: tem.paired $!\n";
+	my $bfh = IO::File->new($blast_output) || "Can not open blast result file: $blast_output $!\n";
 	while(<$bfh>)
 	{
 		chomp;
@@ -385,7 +420,8 @@ sub findRedundancy
 	return "null\tn";
 }
 
-sub rcSeq {
+sub rcSeq 
+{
         my $seq_r = shift;
         my $tag = shift; defined $tag or $tag = 'rc'; # $tag = lc($tag);
         my ($Is_r, $Is_c) = (0)x2;
@@ -401,7 +437,8 @@ sub rcSeq {
         return 0;
 }
 
-sub process_cmd {
+sub process_cmd 
+{
 	my ($cmd) = @_;	
 	print "CMD: $cmd\n";
 	my $ret = system($cmd);	

@@ -1,7 +1,9 @@
 #!/usr/bin/perl
-#自己编模块解析blastn结果（速度快），从paired输出格式到table格式
-#bioperl的定义：$hsp->start('hit')总是不大于$hsp->end('hit')，这与blast输出的table格式不同
-#这个程序保持了bioperl的格式，必须加一列strand信息
+# this script is used for parse blastn result with fast speed than Bio::SearchIO
+# input file is blast output, named with paired as suffix
+# output file is tab delimit txt, named with table
+# bioperl的定义：$hsp->start('hit')总是不大于$hsp->end('hit')，这与blast输出的table格式不同
+# 这个程序保持了bioperl的格式，必须加一列strand信息
 
 if (@ARGV < 2)
 {
