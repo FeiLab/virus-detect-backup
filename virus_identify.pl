@@ -111,22 +111,11 @@ while(<IN>){
 	&process_cmd($blast_program." ".$blast_param);
 	&process_cmd("$BIN_DIR/blast_parse_table22.pl $sample.blastn.paired $sample.blastn.table1");#解析blast结果
 	&process_cmd("$BIN_DIR/blast_filter3.pl $sample.blastn.table1 $sample.blastn.table 0.75 5");#对每个query和hit对，只选取e值最高的结果
-
-
-	die;
-	#system("rm $sample.blastn.paired");#解析完，立刻删除
-	#system("rm $sample.blastn.table1");#解析完，立刻删除
-	#s
-	#known与novel contig分离
-	#&process_cmd("$BIN_DIR/query_filter1.pl $sample.blastn.table ./$contig_type/$sample.$contig_type.fa $sample.novel.contigs 60 50 > $sample.known.contigs");#known和novel contigs分开
-
-
-	# split known and novel contigs
+	system("rm $sample.blastn.paired");#解析完，立刻删除
+	system("rm $sample.blastn.table1");#解析完，立刻删除
 	
-	&process_cmd("$BIN_DIR/query_filter1.pl $sample.blastn.table ./$contig_type/$sample.$contig_type.fa $sample.novel.contigs 80 25 > $sample.known.contigs");
-
-
-
+	#known与novel contig分离
+	&process_cmd("$BIN_DIR/query_filter1.pl $sample.blastn.table ./$contig_type/$sample.$contig_type.fa $sample.novel.contigs 60 50 > $sample.known.contigs");#known和novel contigs分开
 	my $file_size= -s "$sample.known.contigs";#根据此文件大小是不是0，进入下面处理流程
 	if($file_size==0){#如果文件大小是0，就结束本次循环
 		system("rm $sample.known.contigs");#保存了所有能够align到已知病毒库的contigs（table格式）
@@ -170,7 +159,7 @@ while(<IN>){
 	&process_cmd("$BIN_DIR/arrange_col2.pl $sample.known.identified1 > $sample.known.identified");#重新生成$sample.known.identified（格式有变化）
 	&process_cmd("$BIN_DIR/plot_results.pl $sample.known.identified $sample.known.table1 result_$sample known");
 
-	#system("rm $sample.blastn.table");
+	system("rm $sample.blastn.table");
 	system("rm $sample.known.table");
 	system("rm $sample.known.cov");
 	system("rm $sample.known.block");#这个文件只用于校对

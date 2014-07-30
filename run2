@@ -1,1 +1,1 @@
-./virus_identify.pl --file_list sample.list --file_type fasta --reference vrl_plant.fasta --contig_type combined
+./virus_identify.pl --file_list sample.list --file_type fastq --reference vrl_plant.fasta --contig_type combined
