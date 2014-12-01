@@ -26,7 +26,7 @@ our $DATABASE_DIR=$WORKING_DIR."/databases";#所有数据库文件所在的目录
 our $BIN_DIR=$WORKING_DIR."/bin";#所有可执行文件所在的目录
 our $Tools=$WORKING_DIR."/tools";#所有作为工具的可执行文件所在的目录
 our $file_list;
-our $image_type = "jpg";
+our $image_type = "pdf";
 our $suffix = "clean";
 #################
 ## 输入参数处理##
@@ -47,7 +47,7 @@ while(<$fh>)
 	chomp;
 	my $sample = $_;
 	system("$Tools/sRNA_len_dist.pl --sample $sample --image_type $image_type --suffix $suffix");
-	system("mv $sample.jpg ./dist_plots");
+	system("mv $sample.pdf ./dist_plots");
 	system("mv $sample.table ./dist_plots");
 }
 $fh->close;

@@ -1,28 +1,36 @@
 #!/usr/bin/perl -w 
 use strict;
-# Ê×ÏÈµ÷»»ÁĞ´ÎÊı£¬È»ºóÅÅĞò£¬×îºó¼Ó±íÍ·Êä³ö
-# ÏÂÁĞcolumnĞèÒª»¥Ïàµ÷»»,ÏÈ¸ù¾İdecription£¬ºó¸ù¾İHit_IDÅÅĞò
-# Contig_ID	Contig_length	Hit_ID	Hit_length	strand	Contig_start	Contig_end	Hit_start	Hit_end	identity	genus	 description	contig_sequence
+# é¦–å…ˆè°ƒæ¢åˆ—æ¬¡æ•°ï¼Œç„¶åæ’åºï¼Œæœ€ååŠ è¡¨å¤´è¾“å‡º
+# ä¸‹åˆ—columnéœ€è¦äº’ç›¸è°ƒæ¢,å…ˆæ ¹æ®Genusï¼Œåæ ¹æ®read_cov(bp)æ’åº
+
 
 if (@ARGV < 1)
 {
-  print "usage: arrange_col2.pl input > output\n";
+  print "usage: arrange_col2.pl input1 input2 > output\n";
   exit(0);
 }
 
-our $input = $ARGV[0]; #ÊäÈëÎÄ¼ş
+our $input1 = $ARGV[0]; #è¾“å…¥æ–‡ä»¶
+our $input2 = $ARGV[1]; #è¾“å…¥æ–‡ä»¶ï¼ŒåŒ…æ‹¬æ•°æ®çš„æ€»readæ•°
 
 my @all_data;
-open(IN, "$input");
-while (<IN>) {
+open(IN2, "$input2");
+my $first_line =<IN2>;
+my ($total_reads)=($first_line=~m/# reads processed: (\d+)/);
+close(IN2);
+
+open(IN1, "$input1");
+while (<IN1>) {
 	chomp; 
 	my @ta = split(/\t/, $_);
     my $coverage= 1.0*$ta[7]/$ta[1];	
-	push(@all_data, [@ta[0,1,7],$coverage,@ta[4,5,6,8,9]]);#Ñ¡ÔñĞèÒªµÄÁĞ£¬²¢ÖØĞÂÅÅÁĞË³Ğò 
+	my $depth_norm= 1e6*$ta[6]*$ta[7]/($ta[1]*$total_reads); # æŠŠdepthç¼–ç¨‹æ ‡å‡†åŒ–åçš„depth
+	push(@all_data, [@ta[0,1,7],$coverage,@ta[4,5],$depth_norm,@ta[8,9,3]]);#é€‰æ‹©éœ€è¦çš„åˆ—ï¼Œå¹¶é‡æ–°æ’åˆ—é¡ºåº 
 }
-close(IN);
-@all_data = sort { ($a->[7] cmp $b->[7]) || ($b->[2] <=> $a->[2])} @all_data; #¸ù¾İGenusºÍhit_covered(bp)ÅÅĞò
+close(IN1);
+
+@all_data = sort { ($a->[7] cmp $b->[7]) || ($b->[2] <=> $a->[2])} @all_data; #æ ¹æ®Genuså’Œread_cov(bp)æ’åº
 
 foreach my $each (@all_data){
-	print join("\t", @$each)."\n";#¾ÍÊä³öµ½±ê×¼Êä³ö	
+	print join("\t", @$each)."\n";#å°±è¾“å‡ºåˆ°æ ‡å‡†è¾“å‡º	
 }

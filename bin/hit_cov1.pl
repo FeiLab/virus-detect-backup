@@ -4,9 +4,11 @@ use strict;
 # 来自blast_parse_table2.pl程序的输出
 # query_name	query_length	hit_name	hit_length	hsp_length	identity	evalue	score	strand	query_start	query_end	hit_start	hit_end
 # 其中2、3、4、5、11、12列(0开始)是必须的
-# 将blast结果的table中的每个hit被query覆盖的hsp全部加起来的长度，然后除以该hit总长度，得到一个ratio(结果)
-# 还可以得到，所有这个组成这个hit的query
-# 对于每个hit，只有满足相似度高于identity，query被覆盖query_cov的hsp才予以考虑
+# inputfile是blast得到的table文件
+# 用大于一定identity且query被覆盖query_cov的hsp来计算hit被hsp覆盖的ratio
+# 这个ratio等于符合要求的hsp长度累加，然后除以hit长度
+# 结果输出到output1：hit名称，hit长度，hit被覆盖bp数，hit被覆盖的百分比，所有contigs名称，contigs数量
+
 if (@ARGV < 2)
 {
   print "usage: hit_cov1.pl input output1 identity query_cov > output2\n";

@@ -90,10 +90,4 @@ open R,"|/usr/bin/R --vanilla --slave" or die $!;#打开一个管道
 print R $R_LD;
 close R;
 
-#################################################
-# convert pdf file to png format				#
-#################################################		
-my $cmd_convert = "convert $output_plots $output_image";
-system($cmd_convert) && die "Error in command: $cmd_convert\n";
-system("rm $output_plots");
 

@@ -6,13 +6,13 @@ use Cwd;
 my $usage = <<_EOUSAGE_;
 
 #########################################################################################
-# virus_itentify.pl --file_list <FILE> --contig_type <String> --file_type <String> --reference [FILE]
+# $0 --file_list <FILE> --contig_type <String> --file_type <String> --reference [FILE]
 #                   --diff_ratio --word_size [INT] --exp_value <Float> --identity_percen <Float>
 #                   --cpu_num  [INT] --mis_penalty [INT] --gap_cost[INT] --gap_extension [INT]
 #                                  
 # Required(2):
 #  --file_list The name of a txt file containing a list of input file names without any suffix
-#  --contig_type The type of contig files(aligned¡¢assembled or combined) 
+#  --contig_type The type of contig files(alignedã€assembled or combined) 
 #
 # Options(3):
 #  --file_type The format of files containing reads are fasta or fastq  [fastq]
@@ -35,36 +35,36 @@ _EOUSAGE_
 	;
 
 ################################
-##   ÉèÖÃËùÓĞÄ¿Â¼ºÍÎÄ¼şµÄÂ·¾¶ ##
+##   è®¾ç½®æ‰€æœ‰ç›®å½•å’Œæ–‡ä»¶çš„è·¯å¾„ ##
 ################################
-our $WORKING_DIR=cwd();#¹¤×÷Ä¿Â¼¾ÍÊÇµ±Ç°Ä¿Â¼
-our $DATABASE_DIR=$WORKING_DIR."/databases";#ËùÓĞÊı¾İ¿âÎÄ¼şËùÔÚµÄÄ¿Â¼
-our $BIN_DIR=$WORKING_DIR."/bin";#ËùÓĞ¿ÉÖ´ĞĞÎÄ¼şËùÔÚµÄÄ¿Â¼
+our $WORKING_DIR=cwd();#å·¥ä½œç›®å½•å°±æ˜¯å½“å‰ç›®å½•
+our $DATABASE_DIR=$WORKING_DIR."/databases";#æ‰€æœ‰æ•°æ®åº“æ–‡ä»¶æ‰€åœ¨çš„ç›®å½•
+our $BIN_DIR=$WORKING_DIR."/bin";#æ‰€æœ‰å¯æ‰§è¡Œæ–‡ä»¶æ‰€åœ¨çš„ç›®å½•
 our $seq_info= $DATABASE_DIR."/vrl_genbank.info";
 our $result_dir= $WORKING_DIR."/result";
 
 ###############################
-##   È«¾Ö±äÁ¿£¨º¬Ä¬ÈÏÉèÖÃ£©  ##
+##   å…¨å±€å˜é‡ï¼ˆå«é»˜è®¤è®¾ç½®ï¼‰  ##
 ###############################
-our $file_list;#°üÀ¨ËùÓĞ´ı´¦ÀíµÄÊäÈëÎÄ¼ş£¨Êı¾İ£©µÄÁĞ±íÎÄ¼ş£¨ÎŞºó×º£©
-our $contig_type;#ÊäÈëcontigµÄÀàĞÍ
-our $reference= "vrl_genbank.fasta";#°üÀ¨È«²¿²Î¿¼ĞòÁĞµÄÎÄ¼şÃû³Æ£¨FASTA¸ñÊ½£©
+our $file_list;#åŒ…æ‹¬æ‰€æœ‰å¾…å¤„ç†çš„è¾“å…¥æ–‡ä»¶ï¼ˆæ•°æ®ï¼‰çš„åˆ—è¡¨æ–‡ä»¶ï¼ˆæ— åç¼€ï¼‰
+our $contig_type;#è¾“å…¥contigçš„ç±»å‹
+our $reference= "vrl_genbank.fasta";#åŒ…æ‹¬å…¨éƒ¨å‚è€ƒåºåˆ—çš„æ–‡ä»¶åç§°ï¼ˆFASTAæ ¼å¼ï¼‰
 our $file_type= "fastq";
 
 our $diff_ratio= 0.25;
 our $word_size = 11;
-our $cpu_num = 8;          #megablastÊ¹ÓÃµÄcpuÊıÄ¿
-our $mis_penalty = -1;     #megablastÖĞ£¬¶Ô´íÅäµÄ·£·Ö£¬±ØĞëÊÇ¸ºÕûÊı
-our $gap_cost = 2;         #megablastÖĞ£¬¶Ôgap openµÄ·£·Ö£¬±ØĞëÊÇÕıÕûÊı
-our $gap_extension = 1;    #megablastÖĞ£¬¶Ôgap openµÄ·£·Ö£¬±ØĞëÊÇÕıÕûÊı
+our $cpu_num = 8;          #megablastä½¿ç”¨çš„cpuæ•°ç›®
+our $mis_penalty = -1;     #megablastä¸­ï¼Œå¯¹é”™é…çš„ç½šåˆ†ï¼Œå¿…é¡»æ˜¯è´Ÿæ•´æ•°
+our $gap_cost = 2;         #megablastä¸­ï¼Œå¯¹gap opençš„ç½šåˆ†ï¼Œå¿…é¡»æ˜¯æ­£æ•´æ•°
+our $gap_extension = 1;    #megablastä¸­ï¼Œå¯¹gap opençš„ç½šåˆ†ï¼Œå¿…é¡»æ˜¯æ­£æ•´æ•°
 our $exp_value = 1e-5;    #
-our $identity_percen = 25;    #tblastxÒÔµ°°×ÖÊĞòÁĞÀ´±È¶ÔÊ±hspµÄ×îĞ¡Í¬Ò»ĞÔ
+our $identity_percen = 25;    #tblastxä»¥è›‹ç™½è´¨åºåˆ—æ¥æ¯”å¯¹æ—¶hspçš„æœ€å°åŒä¸€æ€§
 
-our $filter_query = "F";     #Ä¬ÈÏ²»ĞèÒªÈ¥³ı¼òµ¥ĞòÁĞ£¬Õâ¸ö²»ĞèÒªÓÃ»§Éè¶¨
-our $hits_return = 500;   #megablast·µ»ØµÄhitÊıÄ¿£¬Õâ¸ö²»ĞèÒªÓÃ»§Éè¶¨
-our $input_suffix='clean';           #Êı¾İÎÄ¼şºó×º£¨clean»òunmapped£©
+our $filter_query = "F";     #é»˜è®¤ä¸éœ€è¦å»é™¤ç®€å•åºåˆ—ï¼Œè¿™ä¸ªä¸éœ€è¦ç”¨æˆ·è®¾å®š
+our $hits_return = 500;   #megablastè¿”å›çš„hitæ•°ç›®ï¼Œè¿™ä¸ªä¸éœ€è¦ç”¨æˆ·è®¾å®š
+our $input_suffix='clean';           #æ•°æ®æ–‡ä»¶åç¼€ï¼ˆcleanæˆ–unmappedï¼‰
 #################
-## ÊäÈë²ÎÊı´¦Àí##
+## è¾“å…¥å‚æ•°å¤„ç†##
 #################
 &GetOptions( 'file_list=s' => \$file_list,
 	'contig_type=s' => \$contig_type,
@@ -80,12 +80,12 @@ our $input_suffix='clean';           #Êı¾İÎÄ¼şºó×º£¨clean»òunmapped£©
 	'gap_extension=i' => \$gap_extension
 	 );
 
-unless ($file_list) {#ÖÁÉÙĞèÒª1¸ö²ÎÊı
+unless ($file_list) {#è‡³å°‘éœ€è¦1ä¸ªå‚æ•°
 die $usage;
 }
 
 #################
-##  Ö÷³ÌĞò¿ªÊ¼ ##
+##  ä¸»ç¨‹åºå¼€å§‹ ##
 #################
 main: {
 system("rm *.finished");
@@ -93,90 +93,81 @@ system("rm *.result");
 my $sample;
 my $i=0;
 open(IN,$file_list) || die "Can't open the file $file_list\n";
-my $format="-q";# Ä¬ÈÏÊı¾İÎÄ¼ş¶¼ÊÇfastq¸ñÊ½
+my $format="-q";# é»˜è®¤æ•°æ®æ–‡ä»¶éƒ½æ˜¯fastqæ ¼å¼
 while(<IN>){
-	#Ã¿´ÎÑ­»·¶ÁÈëÒ»ĞĞ£¬ºóĞø´úÂë¶¼ÊÇ´¦Àí¸ÃÑù±¾ÎÄ¼ş£¨Ãû³ÆÎŞºó×º£©¡£
+	#æ¯æ¬¡å¾ªç¯è¯»å…¥ä¸€è¡Œï¼Œåç»­ä»£ç éƒ½æ˜¯å¤„ç†è¯¥æ ·æœ¬æ–‡ä»¶ï¼ˆåç§°æ— åç¼€ï¼‰ã€‚
 	$i=$i+1;
 	chomp;
 	$sample=$_; 
 	print "#processing sample $i by $0: $sample\n";
-	#Ã¿¸öÑù±¾¶¼ÓĞÒ»¸ö×Ô¼ºµÄ½á¹ûÎÄ¼ş¼Ğ
+	#æ¯ä¸ªæ ·æœ¬éƒ½æœ‰ä¸€ä¸ªè‡ªå·±çš„ç»“æœæ–‡ä»¶å¤¹
 	my $sample_dir=$result_dir."_$sample";
 	system("mkdir $sample_dir");
-	&process_cmd("cp ./$contig_type/$sample.$contig_type.fa $sample_dir/contig_sequences.fa");#°ÑÊı¾İcopyµ½½á¹ûÎÄ¼ş¼Ğ
+	&process_cmd("cp ./$contig_type/$sample.$contig_type.fa $sample_dir/contig_sequences.fa");#æŠŠæ•°æ®copyåˆ°ç»“æœæ–‡ä»¶å¤¹
 		
 	system("$BIN_DIR/formatdb -i $DATABASE_DIR/$reference -p F") unless (-e "$DATABASE_DIR/$reference.nhr");
 	my $blast_program = $BIN_DIR."/megablast";
 	my $blast_param = "-i ./$contig_type/$sample.$contig_type.fa -d $DATABASE_DIR/$reference -o $sample.blastn.paired -F $filter_query -a $cpu_num -W $word_size -q $mis_penalty -G $gap_cost -E $gap_extension -b $hits_return -e $exp_value";				
 	&process_cmd($blast_program." ".$blast_param);
-	&process_cmd("$BIN_DIR/blast_parse_table22.pl $sample.blastn.paired $sample.blastn.table1");#½âÎöblast½á¹û
-	&process_cmd("$BIN_DIR/blast_filter3.pl $sample.blastn.table1 $sample.blastn.table 0.75 5");#¶ÔÃ¿¸öqueryºÍhit¶Ô£¬Ö»Ñ¡È¡eÖµ×î¸ßµÄ½á¹û
-
-
-	die;
-	#system("rm $sample.blastn.paired");#½âÎöÍê£¬Á¢¿ÌÉ¾³ı
-	#system("rm $sample.blastn.table1");#½âÎöÍê£¬Á¢¿ÌÉ¾³ı
-	#s
-	#knownÓënovel contig·ÖÀë
-	#&process_cmd("$BIN_DIR/query_filter1.pl $sample.blastn.table ./$contig_type/$sample.$contig_type.fa $sample.novel.contigs 60 50 > $sample.known.contigs");#knownºÍnovel contigs·Ö¿ª
-
-
-	# split known and novel contigs
+	&process_cmd("$BIN_DIR/blast_parse_table22.pl $sample.blastn.paired $sample.blastn.table1");#è§£æblastç»“æœ
+	&process_cmd("$BIN_DIR/blast_filter3.pl $sample.blastn.table1 $sample.blastn.table 0.75 5");#å¯¹æ¯ä¸ªqueryå’Œhitå¯¹ï¼Œåªé€‰å–eå€¼æœ€é«˜çš„ç»“æœ
+	system("rm $sample.blastn.paired");#è§£æå®Œï¼Œç«‹åˆ»åˆ é™¤
+	system("rm $sample.blastn.table1");#è§£æå®Œï¼Œç«‹åˆ»åˆ é™¤
 	
-	&process_cmd("$BIN_DIR/query_filter1.pl $sample.blastn.table ./$contig_type/$sample.$contig_type.fa $sample.novel.contigs 80 25 > $sample.known.contigs");
-
-
-
-	my $file_size= -s "$sample.known.contigs";#¸ù¾İ´ËÎÄ¼ş´óĞ¡ÊÇ²»ÊÇ0£¬½øÈëÏÂÃæ´¦ÀíÁ÷³Ì
-	if($file_size==0){#Èç¹ûÎÄ¼ş´óĞ¡ÊÇ0£¬¾Í½áÊø±¾´ÎÑ­»·
-		system("rm $sample.known.contigs");#±£´æÁËËùÓĞÄÜ¹»alignµ½ÒÑÖª²¡¶¾¿âµÄcontigs£¨table¸ñÊ½£©
-		system("rm $sample.novel.contigs");#±£´æÁËËùÓĞ²»ÄÜalignµ½ÒÑÖª²¡¶¾¿âµÄcontigs£¨fasta¸ñÊ½£©
+	#knownä¸novel contigåˆ†ç¦»
+	&process_cmd("$BIN_DIR/query_filter1.pl $sample.blastn.table ./$contig_type/$sample.$contig_type.fa $sample.novel.contigs 60 50 > $sample.known.contigs");#knownå’Œnovel contigsåˆ†å¼€
+	my $file_size= -s "$sample.known.contigs";#æ ¹æ®æ­¤æ–‡ä»¶å¤§å°æ˜¯ä¸æ˜¯0ï¼Œè¿›å…¥ä¸‹é¢å¤„ç†æµç¨‹
+	if($file_size==0){#å¦‚æœæ–‡ä»¶å¤§å°æ˜¯0ï¼Œå°±ç»“æŸæœ¬æ¬¡å¾ªç¯
+		system("rm $sample.known.contigs");#ä¿å­˜äº†æ‰€æœ‰èƒ½å¤Ÿalignåˆ°å·²çŸ¥ç—…æ¯’åº“çš„contigsï¼ˆtableæ ¼å¼ï¼‰
+		system("rm $sample.novel.contigs");#ä¿å­˜äº†æ‰€æœ‰ä¸èƒ½alignåˆ°å·²çŸ¥ç—…æ¯’åº“çš„contigsï¼ˆfastaæ ¼å¼ï¼‰
 		system("rm $sample.blastn.table");
-		system("touch $sample_dir/no_virus_detected");#½¨Á¢Õâ¸öÎÄ¼ş£¬±íÊ¾´ËÑù±¾ÖĞÃ»ÓĞ¼ì²âµ½²¡¶¾
+		system("touch $sample_dir/no_virus_detected");#å»ºç«‹è¿™ä¸ªæ–‡ä»¶ï¼Œè¡¨ç¤ºæ­¤æ ·æœ¬ä¸­æ²¡æœ‰æ£€æµ‹åˆ°ç—…æ¯’
 		next;
 	}
-	#ÏÈ¿´ÓĞÃ»ÓĞknownµÄvirus
-	&process_cmd("$BIN_DIR/uniqComb.pl $sample.blastn.table -index $sample.known.contigs -col 0 -newCol 0 -exist > $sample.known.table");#known contigs¶ÔÓ¦µÄblast½á¹û
+	#å…ˆçœ‹æœ‰æ²¡æœ‰knownçš„virus
+	&process_cmd("$BIN_DIR/uniqComb.pl $sample.blastn.table -index $sample.known.contigs -col 0 -newCol 0 -exist > $sample.known.table");#known contigså¯¹åº”çš„blastç»“æœ
 	&process_cmd("$BIN_DIR/hit_cov1.pl $sample.known.table $sample.known.cov 60 0.5 > $sample.known.block");
 	&process_cmd("cut -f1 $sample.known.cov > hit_virus.list");
 	&process_cmd("$BIN_DIR/extractFromFasta.pl -i $DATABASE_DIR/$reference --type list --query hit_virus.list --output1 hit_virus.fa --output2 remainding.fa");
 	
-	#ÔÙµÃµ½average depthĞÅÏ¢
-	my $sample_reads= $sample.".$input_suffix";#readÎÄ¼ş£¬ĞèÒªalignµ½ĞÂcontigsÉÏ
-	&process_cmd("bowtie-build --quiet hit_virus.fa virus");
-	if($file_type eq "fasta"){$format="-f"};	
-	&process_cmd("bowtie --quiet virus -v 1 -p 8 -a --best --strata $format $sample_reads -S --sam-nohead $sample.sam");
+	#å†å¾—åˆ°average depthä¿¡æ¯
+	my $sample_reads= $sample.".$input_suffix";#readæ–‡ä»¶ï¼Œéœ€è¦alignåˆ°æ–°contigsä¸Š
+	&process_cmd("$BIN_DIR/bowtie-build --quiet hit_virus.fa virus");
+	if($file_type eq "fasta"){$format="-f"};
+	&process_cmd("$BIN_DIR/bowtie virus -v 1 -p 8 -a --best --strata $format $sample_reads -S --sam-nohead $sample.sam 2>bowtie.log");
 	&process_cmd("$BIN_DIR/samtools faidx hit_virus.fa");	
 	&process_cmd("$BIN_DIR/samtools view -bt hit_virus.fa.fai $sample.sam > $sample.bam");
 	&process_cmd("$BIN_DIR/samtools sort $sample.bam $sample.sorted");
+	&process_cmd("$BIN_DIR/samtools index $sample.sorted.bam");#å»ºç«‹ç´¢å¼•æ–‡ä»¶ï¼Œç”¨äºIGVäººå·¥æŸ¥çœ‹
 	&process_cmd("$BIN_DIR/samtools mpileup -f hit_virus.fa $sample.sorted.bam > $sample.pileup");	
 	&process_cmd("$BIN_DIR/pileup_depth.pl $sample.pileup $sample.known.depth");
-	&process_cmd("$BIN_DIR/ColLink.pl $sample.known.cov -keyC1 0 -Col1 1,2 -keyC2 0 -add -f1 $sample.known.depth > 1.tem");#´ÓdepthÎÄ¼şÌáÈ¡µÚ2¡¢3ÁĞ¼Óµ½ÎÄ¼ş$sample.known.covµÄºóÃæ	
-	&process_cmd("$BIN_DIR/ColLink.pl 1.tem -keyC1 0 -Col1 2,3 -keyC2 0 -add -f1 $seq_info > $sample.known.identified1");#´Ó$seq_infoÌáÈ¡µÚ3¡¢4ÁĞ¼Óµ½ÎÄ¼ş1.temµÄºóÃæ		
-	&process_cmd("$BIN_DIR/hit_filter2.pl --input $sample.known.identified1 --diff_ratio $diff_ratio --output $sample.known.identified");#¸ù¾İËù°üÀ¨µÄcontigµÄÖØ¸´Çé¿ö£¬ºÏ²¢hit	
-	&process_cmd("$BIN_DIR/query_filter2.pl $sample.known.identified $sample.known.table $sample.contigs.table");#°Ñcontig¶ÔÓ¦µÄhit¹ıÂË£¬»òÕß¶ÔÓ¦µ½known.identifiedµÄhitÉÏ£¬»òÕß¶ÔÓ¦µ½e value×î¸ßµÄhitÉÏÃæ		
-	&process_cmd("$BIN_DIR/ColLink.pl $sample.contigs.table -keyC1 0 -Col1 2,3 -keyC2 2 -add -f1 $seq_info > $sample.contigs.info");#Ìî¼Ó$seq_infoÎÄ¼şÖĞµÄµÚ3¡¢4ÁĞ£¨genusºÍspicies£©
-	&process_cmd("$BIN_DIR/ColLink.pl $sample.contigs.info -keyC1 0 -Col1 1 -keyC2 0 -add -f1 $sample.known.contigs > $sample.contigs.table1");#Ìî¼Ó$sample.known.contigsÎÄ¼şÖĞµÄµÚ2ÁĞ£¨contigĞòÁĞ£©
-	&process_cmd("$BIN_DIR/arrange_col1.pl $sample.contigs.table1 > $sample_dir/$sample.known.xls");#ÖØĞÂ¶Ô±í¸ñ²¼¾Ö£¬µÃµ½known contigsµÄ±È¶ÔÎÄ¼ş
+	&process_cmd("$BIN_DIR/ColLink.pl $sample.known.cov -keyC1 0 -Col1 1,2 -keyC2 0 -add -f1 $sample.known.depth > 1.tem");#ä»depthæ–‡ä»¶æå–ç¬¬2ã€3åˆ—åŠ åˆ°æ–‡ä»¶$sample.known.covçš„åé¢	
+	&process_cmd("$BIN_DIR/ColLink.pl 1.tem -keyC1 0 -Col1 2,3 -keyC2 0 -add -f1 $seq_info > $sample.known.identified1");#ä»$seq_infoæå–ç¬¬3ã€4åˆ—åŠ åˆ°æ–‡ä»¶1.temçš„åé¢		
+	&process_cmd("$BIN_DIR/hit_filter2.pl --input $sample.known.identified1 --diff_ratio $diff_ratio --output $sample.known.identified");#æ ¹æ®æ‰€åŒ…æ‹¬çš„contigçš„é‡å¤æƒ…å†µï¼Œåˆå¹¶hit	
+	&process_cmd("$BIN_DIR/query_filter2.pl $sample.known.identified $sample.known.table $sample.contigs.table");#æŠŠcontigå¯¹åº”çš„hitè¿‡æ»¤ï¼Œæˆ–è€…å¯¹åº”åˆ°known.identifiedçš„hitä¸Šï¼Œæˆ–è€…å¯¹åº”åˆ°e valueæœ€é«˜çš„hitä¸Šé¢		
+	&process_cmd("$BIN_DIR/ColLink.pl $sample.contigs.table -keyC1 0 -Col1 2,3 -keyC2 2 -add -f1 $seq_info > $sample.contigs.info");#å¡«åŠ $seq_infoæ–‡ä»¶ä¸­çš„ç¬¬3ã€4åˆ—ï¼ˆgenuså’Œspiciesï¼‰
+	&process_cmd("$BIN_DIR/ColLink.pl $sample.contigs.info -keyC1 0 -Col1 1 -keyC2 0 -add -f1 $sample.known.contigs > $sample.contigs.table1");#å¡«åŠ $sample.known.contigsæ–‡ä»¶ä¸­çš„ç¬¬2åˆ—ï¼ˆcontigåºåˆ—ï¼‰
+	&process_cmd("$BIN_DIR/arrange_col1.pl $sample.contigs.table1 > $sample_dir/$sample.known.xls");#é‡æ–°å¯¹è¡¨æ ¼å¸ƒå±€ï¼Œå¾—åˆ°known contigsçš„æ¯”å¯¹æ–‡ä»¶
 	
-	&process_cmd("cut -f1 $sample.known.identified > known.references.list");#È¡³öhit name£¨µÚ3ÁĞ£©,½«ÓÃÓÚÉú³ÉsamÎÄ¼ş
-	&process_cmd("$BIN_DIR/uniqComb.pl $sample.contigs.table1 -index known.references.list -col 0 -newCol 2 -exist > $sample.known.table1");#Ö»Òª.known.identifiedÖĞµÄhit¶ÔÓ¦µÄ
-	&process_cmd("$BIN_DIR/extractFromFasta.pl -i $DATABASE_DIR/$reference --type list --query known.references.list --output1 $sample_dir/known.references.fa --output2 remainding.fa");#ÏÔÊ¾samÓÃ	
-	&process_cmd("$BIN_DIR/blastTable2sam.pl $sample.known.table1 > $sample_dir/$sample.known.sam");#²úÉú¶ÔÓ¦hitµÄsamÎÄ¼ş	
+	&process_cmd("cut -f1 $sample.known.identified > known.references.list");#å–å‡ºhit nameï¼ˆç¬¬1åˆ—ï¼‰,å°†ç”¨äºç”Ÿæˆsamæ–‡ä»¶
+	&process_cmd("$BIN_DIR/uniqComb.pl $sample.contigs.table1 -index known.references.list -col 0 -newCol 2 -exist > $sample.known.table1");#åªè¦.known.identifiedä¸­çš„hitå¯¹åº”çš„
+	&process_cmd("$BIN_DIR/extractFromFasta.pl -i $DATABASE_DIR/$reference --type list --query known.references.list --output1 $sample_dir/known.references.fa --output2 remainding.fa");#æ˜¾ç¤ºsamç”¨	
+	&process_cmd("$BIN_DIR/blastTable2sam.pl $sample.known.table1 > $sample_dir/$sample.known.sam");#äº§ç”Ÿå¯¹åº”hitçš„samæ–‡ä»¶	
 	
-	system("mkdir $sample_dir/known_references");#²úÉúÒ»¸ö×ÓÄ¿Â¼£¬ÓÃÓÚ·Å×îºóµÄhtmlÎÄ¼ş
-	&process_cmd("$BIN_DIR/hit_cov1.pl $sample.known.table1 $sample.known.cov 60 0.5 > $sample.known.block");#ÖØĞÂÉú³É$sample.known.cov
-	&process_cmd("$BIN_DIR/ColLink.pl $sample.known.cov -keyC1 0 -Col1 6,7,8,9 -keyC2 0 -add -f1 $sample.known.identified > $sample.known.identified1");#ÖØĞÂÉú³É$sample.known.identified1
-	&process_cmd("$BIN_DIR/arrange_col2.pl $sample.known.identified1 > $sample.known.identified");#ÖØĞÂÉú³É$sample.known.identified£¨¸ñÊ½ÓĞ±ä»¯£©
+	system("mkdir $sample_dir/known_references");#äº§ç”Ÿä¸€ä¸ªå­ç›®å½•ï¼Œç”¨äºæ”¾æœ€åçš„htmlæ–‡ä»¶
+	&process_cmd("$BIN_DIR/hit_cov1.pl $sample.known.table1 $sample.known.cov 60 0.5 > $sample.known.block");#é‡æ–°ç”Ÿæˆ$sample.known.cov
+	&process_cmd("$BIN_DIR/ColLink.pl $sample.known.cov -keyC1 0 -Col1 6,7,8,9 -keyC2 0 -add -f1 $sample.known.identified > $sample.known.identified1");#é‡æ–°ç”Ÿæˆ$sample.known.identified1
+	&process_cmd("$BIN_DIR/arrange_col2.pl $sample.known.identified1 bowtie.log > $sample.known.identified");#é‡æ–°ç”Ÿæˆ$sample.known.identifiedï¼ˆæ ¼å¼æœ‰å˜åŒ–ï¼‰
 	&process_cmd("$BIN_DIR/plot_results.pl $sample.known.identified $sample.known.table1 result_$sample known");
 
-	#system("rm $sample.blastn.table");
+	system("rm $sample.blastn.table");
 	system("rm $sample.known.table");
 	system("rm $sample.known.cov");
-	system("rm $sample.known.block");#Õâ¸öÎÄ¼şÖ»ÓÃÓÚĞ£¶Ô
+	system("rm $sample.known.block");#è¿™ä¸ªæ–‡ä»¶åªç”¨äºæ ¡å¯¹
 	system("rm $sample.sam");
 	system("rm $sample.bam");
-	system("rm $sample.sorted.bam");
+	system("mv $sample.sorted.bam $sample_dir/known.sorted.bam");#è¿™ä¸ªä¿ç•™ï¼Œç”¨äºIGVäººå·¥æŸ¥çœ‹
+	system("mv $sample.sorted.bam.bai $sample_dir/known.sorted.bam.bai");#è¿™ä¸ªä¿ç•™ï¼Œç”¨äºIGVäººå·¥æŸ¥çœ‹
 	system("rm $sample.pileup");
 	system("rm $sample.known.depth");
 	system("rm $sample.known.identified1");
@@ -188,21 +179,21 @@ while(<IN>){
 	system("rm $sample.known.table1");
 	system("rm *.ebwt");
 
-	if($contig_type ne "aligned")#Èç¹ûĞèÒª½øÒ»²½¼ì²énovelµÄ²¡¶¾
+	if($contig_type ne "aligned")#å¦‚æœéœ€è¦è¿›ä¸€æ­¥æ£€æŸ¥novelçš„ç—…æ¯’
 	{
-		#Ê×ÏÈ°ÑnovelµÄcontigsÓÃtblastx¶Ô±Èµ½²¡¶¾¿â
+		#é¦–å…ˆæŠŠnovelçš„contigsç”¨tblastxå¯¹æ¯”åˆ°ç—…æ¯’åº“
 		$blast_program = $BIN_DIR."/blastall -p tblastx";
 		$blast_param = "-i $sample.novel.contigs -d $DATABASE_DIR/$reference -o $sample.novel.paired -F $filter_query -a $cpu_num -e $exp_value";				
 		&process_cmd($blast_program." ".$blast_param);
 		&process_cmd("$BIN_DIR/blast_parse_table44.pl $sample.novel.paired $sample.novel1.table");
-		&process_cmd("$BIN_DIR/blast_filter5.pl $sample.novel1.table $sample.novel.table 0 5");#¶ÔÃ¿¸öqueryºÍhit¶Ô£¬Ö»Ñ¡È¡eÖµ×î¸ßµÄ½á¹û		
+		&process_cmd("$BIN_DIR/blast_filter5.pl $sample.novel1.table $sample.novel.table 0 5");#å¯¹æ¯ä¸ªqueryå’Œhitå¯¹ï¼Œåªé€‰å–eå€¼æœ€é«˜çš„ç»“æœ		
 		system("rm $sample.novel.paired");
 		system("rm $sample.novel1.table");
-		my $file_size= -s "$sample.novel.table";#¸ù¾İ´ËÎÄ¼ş´óĞ¡ÊÇ²»ÊÇ0£¬½øÈëÏÂÃæ´¦ÀíÁ÷³Ì
-		if($file_size==0){#Èç¹ûÎÄ¼ş´óĞ¡ÊÇ0£¬¾Í½áÊø±¾´ÎÑ­»·
+		my $file_size= -s "$sample.novel.table";#æ ¹æ®æ­¤æ–‡ä»¶å¤§å°æ˜¯ä¸æ˜¯0ï¼Œè¿›å…¥ä¸‹é¢å¤„ç†æµç¨‹
+		if($file_size==0){#å¦‚æœæ–‡ä»¶å¤§å°æ˜¯0ï¼Œå°±ç»“æŸæœ¬æ¬¡å¾ªç¯
 			system("rm $sample.novel.table");
 			system("rm $sample.novel.contigs");			
-			system("touch $sample_dir/no_novel_virus_detected");#½¨Á¢Õâ¸öÎÄ¼ş£¬±íÊ¾´ËÑù±¾ÖĞÃ»ÓĞ¼ì²âĞÂ²¡¶¾
+			system("touch $sample_dir/no_novel_virus_detected");#å»ºç«‹è¿™ä¸ªæ–‡ä»¶ï¼Œè¡¨ç¤ºæ­¤æ ·æœ¬ä¸­æ²¡æœ‰æ£€æµ‹æ–°ç—…æ¯’
 			system("cut -f1 $sample.known.contigs > known.contigs.list");
 			&process_cmd("$BIN_DIR/extractFromFasta.pl -i $sample_dir/contig_sequences.fa --type list --query known.contigs.list --output1 known.contigs.fa --output2 $sample_dir/unknown.contigs.fa");
 			system("rm known.contigs.list");
@@ -211,47 +202,47 @@ while(<IN>){
 			next;
 		}
 		
-		#ÕâÀï×¢Òâ¶ÔhspµÄÒªÇó¶¼ÒªµÍ
+		#è¿™é‡Œæ³¨æ„å¯¹hspçš„è¦æ±‚éƒ½è¦ä½
 		&process_cmd("$BIN_DIR/hit_cov1.pl $sample.novel.table $sample.novel.cov $identity_percen 0 > $sample.novel.block");
 		&process_cmd("cut -f1 $sample.novel.cov > hit_virus.list");
 		&process_cmd("$BIN_DIR/extractFromFasta.pl -i $DATABASE_DIR/$reference --type list --query hit_virus.list --output1 hit_virus.fa --output2 remainding.fa");
 		
-		#ÔÙµÃµ½average depthĞÅÏ¢
-		my $sample_reads= $sample.".$input_suffix";#readÎÄ¼ş£¬ĞèÒªalignµ½ĞÂcontigsÉÏ
-		&process_cmd("bowtie-build --quiet hit_virus.fa virus");				
-		&process_cmd("bowtie --quiet virus -v 1 -p 8 -a --best --strata $format $sample_reads -S --sam-nohead $sample.sam");
+		#å†å¾—åˆ°average depthä¿¡æ¯
+		my $sample_reads= $sample.".$input_suffix";#readæ–‡ä»¶ï¼Œéœ€è¦alignåˆ°æ–°contigsä¸Š
+		&process_cmd("$BIN_DIR/bowtie-build --quiet hit_virus.fa virus");				
+		&process_cmd("$BIN_DIR/bowtie --quiet virus -v 1 -p 8 -a --best --strata $format $sample_reads -S --sam-nohead $sample.sam");
 		&process_cmd("$BIN_DIR/samtools faidx hit_virus.fa");	
 		&process_cmd("$BIN_DIR/samtools view -bt hit_virus.fa.fai $sample.sam > $sample.bam");
 		&process_cmd("$BIN_DIR/samtools sort $sample.bam $sample.sorted");
 		&process_cmd("$BIN_DIR/samtools mpileup -f hit_virus.fa $sample.sorted.bam > $sample.pileup");	
 		&process_cmd("$BIN_DIR/pileup_depth.pl $sample.pileup $sample.novel.depth");
-		&process_cmd("$BIN_DIR/ColLink.pl $sample.novel.cov -keyC1 0 -Col1 1,2 -keyC2 0 -add -f1 $sample.novel.depth > 1.tem");#´ÓdepthÎÄ¼şÌáÈ¡µÚ2¡¢3ÁĞ¼Óµ½ÎÄ¼ş$sample.novel.covµÄºóÃæ
-		&process_cmd("$BIN_DIR/ColLink.pl 1.tem -keyC1 0 -Col1 2,3 -keyC2 0 -add -f1 $seq_info > $sample.novel.identified1");#´Ó$seq_infoÌáÈ¡µÚ3¡¢4ÁĞ¼Óµ½ÎÄ¼ş1.temµÄºóÃæ			
-		&process_cmd("$BIN_DIR/hit_filter2.pl --input $sample.novel.identified1 --diff_ratio $diff_ratio --output $sample.novel.identified");#ÕâÊÇµÃµ½µÄ×îÖÕÎÄ¼ş
-		&process_cmd("$BIN_DIR/query_filter2.pl $sample.novel.identified $sample.novel.table $sample.contigs.table");#°ÑµÚÒ»ÎÄ¼şÖĞ´æÔÚµÄhit¶ÔÓ¦µÄcontig±£ÁôÏÂÀ´	
-		&process_cmd("$BIN_DIR/ColLink.pl $sample.contigs.table -keyC1 0 -Col1 2,3 -keyC2 2 -add -f1 $seq_info > $sample.contigs.info");#Ìí¼ÓhitµÄ×¢ÊÍĞÅÏ¢
-		&process_cmd("$BIN_DIR/fasta2tab.pl $sample.novel.contigs $sample.novel.contigs1");#¸ñÊ½×ª»»
-		&process_cmd("$BIN_DIR/ColLink.pl $sample.contigs.info -keyC1 0 -Col1 1 -keyC2 0 -add -f1 $sample.novel.contigs1 > $sample.contigs.table1");#Ìí¼ÓcontigµÄĞòÁĞĞÅÏ¢		
-		&process_cmd("$BIN_DIR/arrange_col1.pl $sample.contigs.table1 > $sample_dir/$sample.novel.xls");#ÖØĞÂ¶Ô±í¸ñ²¼¾Ö
+		&process_cmd("$BIN_DIR/ColLink.pl $sample.novel.cov -keyC1 0 -Col1 1,2 -keyC2 0 -add -f1 $sample.novel.depth > 1.tem");#ä»depthæ–‡ä»¶æå–ç¬¬2ã€3åˆ—åŠ åˆ°æ–‡ä»¶$sample.novel.covçš„åé¢
+		&process_cmd("$BIN_DIR/ColLink.pl 1.tem -keyC1 0 -Col1 2,3 -keyC2 0 -add -f1 $seq_info > $sample.novel.identified1");#ä»$seq_infoæå–ç¬¬3ã€4åˆ—åŠ åˆ°æ–‡ä»¶1.temçš„åé¢			
+		&process_cmd("$BIN_DIR/hit_filter2.pl --input $sample.novel.identified1 --diff_ratio $diff_ratio --output $sample.novel.identified");#è¿™æ˜¯å¾—åˆ°çš„æœ€ç»ˆæ–‡ä»¶
+		&process_cmd("$BIN_DIR/query_filter2.pl $sample.novel.identified $sample.novel.table $sample.contigs.table");#æŠŠç¬¬ä¸€æ–‡ä»¶ä¸­å­˜åœ¨çš„hitå¯¹åº”çš„contigä¿ç•™ä¸‹æ¥	
+		&process_cmd("$BIN_DIR/ColLink.pl $sample.contigs.table -keyC1 0 -Col1 2,3 -keyC2 2 -add -f1 $seq_info > $sample.contigs.info");#æ·»åŠ hitçš„æ³¨é‡Šä¿¡æ¯
+		&process_cmd("$BIN_DIR/fasta2tab.pl $sample.novel.contigs $sample.novel.contigs1");#æ ¼å¼è½¬æ¢
+		&process_cmd("$BIN_DIR/ColLink.pl $sample.contigs.info -keyC1 0 -Col1 1 -keyC2 0 -add -f1 $sample.novel.contigs1 > $sample.contigs.table1");#æ·»åŠ contigçš„åºåˆ—ä¿¡æ¯		
+		&process_cmd("$BIN_DIR/arrange_col1.pl $sample.contigs.table1 > $sample_dir/$sample.novel.xls");#é‡æ–°å¯¹è¡¨æ ¼å¸ƒå±€
 		
-		&process_cmd("cut -f1 $sample.novel.identified > novel.references.list");#È¡³öhit name£¨µÚ3ÁĞ£©,½«ÓÃÓÚÉú³ÉsamÎÄ¼ş
-		&process_cmd("$BIN_DIR/uniqComb.pl $sample.contigs.table1 -index novel.references.list -col 0 -newCol 2 -exist > $sample.novel.table1");#Ö»Òª.known.identifiedÖĞµÄhit¶ÔÓ¦µÄ
+		&process_cmd("cut -f1 $sample.novel.identified > novel.references.list");#å–å‡ºhit nameï¼ˆç¬¬3åˆ—ï¼‰,å°†ç”¨äºç”Ÿæˆsamæ–‡ä»¶
+		&process_cmd("$BIN_DIR/uniqComb.pl $sample.contigs.table1 -index novel.references.list -col 0 -newCol 2 -exist > $sample.novel.table1");#åªè¦.known.identifiedä¸­çš„hitå¯¹åº”çš„
 	
-		system("mkdir $sample_dir/novel_references");#²úÉúÒ»¸ö×ÓÄ¿Â¼£¬ÓÃÓÚ·Å×îºóµÄhtmlÎÄ¼ş		
-		&process_cmd("$BIN_DIR/hit_cov2.pl $sample.novel.table1 $sample.novel.cov $identity_percen 0 > $sample.novel.block");#ÖØĞÂÉú³É$sample.novel.cov
-		&process_cmd("$BIN_DIR/ColLink.pl $sample.novel.cov -keyC1 0 -Col1 6,7,8,9 -keyC2 0 -add -f1 $sample.novel.identified > $sample.novel.identified1");#ÖØĞÂÉú³É$sample.novel.identified1
-		&process_cmd("$BIN_DIR/arrange_col2.pl $sample.novel.identified1 > $sample.novel.identified");#ÖØĞÂÉú³É$sample.novel.identified£¨¸ñÊ½ÓĞ±ä»¯£©
+		system("mkdir $sample_dir/novel_references");#äº§ç”Ÿä¸€ä¸ªå­ç›®å½•ï¼Œç”¨äºæ”¾æœ€åçš„htmlæ–‡ä»¶		
+		&process_cmd("$BIN_DIR/hit_cov2.pl $sample.novel.table1 $sample.novel.cov $identity_percen 0 > $sample.novel.block");#é‡æ–°ç”Ÿæˆ$sample.novel.cov
+		&process_cmd("$BIN_DIR/ColLink.pl $sample.novel.cov -keyC1 0 -Col1 6,7,8,9 -keyC2 0 -add -f1 $sample.novel.identified > $sample.novel.identified1");#é‡æ–°ç”Ÿæˆ$sample.novel.identified1
+		&process_cmd("$BIN_DIR/arrange_col2.pl $sample.novel.identified1 bowtie.log > $sample.novel.identified");#é‡æ–°ç”Ÿæˆ$sample.novel.identifiedï¼ˆæ ¼å¼æœ‰å˜åŒ–ï¼‰
 		&process_cmd("$BIN_DIR/plot_results.pl $sample.novel.identified $sample.novel.table1 result_$sample novel");
 		
-		#ÏÂÃæÌáÈ¡¼È²»ÊÇknownÒ²²»ÊÇnovelµÄcontigs
+		#ä¸‹é¢æå–æ—¢ä¸æ˜¯knownä¹Ÿä¸æ˜¯novelçš„contigs
 		system("cut -f1 $sample.known.contigs > known.contigs.list");
 		system("cut -f1 $sample.novel.table | sort | uniq > novel.contigs.list");
-		system("cat known.contigs.list novel.contigs.list > final.contigs.list");#ËùÓĞÓĞhitµÄĞòÁĞ
+		system("cat known.contigs.list novel.contigs.list > final.contigs.list");#æ‰€æœ‰æœ‰hitçš„åºåˆ—
 		&process_cmd("$BIN_DIR/extractFromFasta.pl -i $sample_dir/contig_sequences.fa --type list --query final.contigs.list --output1 known.contigs.fa --output2 $sample_dir/unknown.contigs.fa");
 		
 		system("rm $sample.novel.table");
 		system("rm $sample.novel.cov");
-		system("rm $sample.novel.block");#Õâ¸öÎÄ¼şÖ»ÓÃÓÚĞ£¶Ô
+		system("rm $sample.novel.block");#è¿™ä¸ªæ–‡ä»¶åªç”¨äºæ ¡å¯¹
 		system("rm $sample.sam");
 		system("rm $sample.bam");
 		system("rm $sample.sorted.bam");
@@ -259,13 +250,13 @@ while(<IN>){
 		system("rm $sample.novel.depth");
 		system("rm $sample.novel.identified1");
 		system("rm $sample.novel.identified");
-		system("rm $sample.contigs.table");#¸²¸Ç¹ıknown²úÉúµÄÍ¬ÃûÎÄ¼ş
-		system("rm $sample.contigs.info");#¸²¸Ç¹ıknown²úÉúµÄÍ¬ÃûÎÄ¼ş
-		system("rm $sample.contigs.table1");#¸²¸Ç¹ıknown²úÉúµÄÍ¬ÃûÎÄ¼ş
+		system("rm $sample.contigs.table");#è¦†ç›–è¿‡knownäº§ç”Ÿçš„åŒåæ–‡ä»¶
+		system("rm $sample.contigs.info");#è¦†ç›–è¿‡knownäº§ç”Ÿçš„åŒåæ–‡ä»¶
+		system("rm $sample.contigs.table1");#è¦†ç›–è¿‡knownäº§ç”Ÿçš„åŒåæ–‡ä»¶
 		system("rm novel.references.list");
 		system("rm $sample.novel.table1");
 		system("rm *.ebwt");
-		system("rm $sample.known.contigs");#ÕâÀï²ÅÄÜÉ¾³ı
+		system("rm $sample.known.contigs");#è¿™é‡Œæ‰èƒ½åˆ é™¤
 		system("rm $sample.novel.contigs");
 		system("rm $sample.novel.contigs1");	
 		system("rm known.contigs.list");
@@ -275,15 +266,15 @@ while(<IN>){
 	}
 }
 close(IN);
-system("rm hit_virus.list");
-system("rm hit_virus.fa");
-system("rm hit_virus.fa.fai");
-system("rm remainding.fa");
+system("rm hit_virus.list");#è¿™ä¸ªæ–‡ä»¶åç”¨äº†ä¸¤æ¬¡ï¼Œæœ€åä¸€èµ·åˆ é™¤
+system("rm hit_virus.fa");#è¿™ä¸ªæ–‡ä»¶åç”¨äº†ä¸¤æ¬¡ï¼Œæœ€åä¸€èµ·åˆ é™¤
+system("rm hit_virus.fa.fai");#è¿™ä¸ªæ–‡ä»¶åç”¨äº†ä¸¤æ¬¡ï¼Œæœ€åä¸€èµ·åˆ é™¤
+system("rm remainding.fa");#è¿™ä¸ªæ–‡ä»¶åç”¨äº†ä¸¤æ¬¡ï¼Œæœ€åä¸€èµ·åˆ é™¤
 system("rm *.tem");
 system("rm *.log");
-print "###############################\n";
 print "All the samples have been processed by $0\n";
-system("touch virus_identify.$contig_type.finished");#½¨Á¢Õâ¸öÎÄ¼ş£¬±íÊ¾½áÊø±êÖ¾
+print "###############################\n";
+system("touch virus_identify.$contig_type.finished");#å»ºç«‹è¿™ä¸ªæ–‡ä»¶ï¼Œè¡¨ç¤ºç»“æŸæ ‡å¿—
 
 }
 sub process_cmd {

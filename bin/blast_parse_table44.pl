@@ -1,8 +1,8 @@
 #!/usr/bin/perl
 #自己编模块解析tblastx结果（速度快），从paired输出格式到table格式
 #bioperl的定义：$hsp->start('hit')总是不大于$hsp->end('hit')，这与blast输出的table格式不同
-#这个程序保持了bioperl的格式，必须加一列strand信息
-
+#这个程序保持了bioperl的格式，必须加一列strand信息(实际上是Frame)
+#与blast_parse_table4.pl的区别是多了4列信息，其中包括$identity2的特殊格式55/204(26%)
 if (@ARGV < 2)
 {
   print "usage: blast_parse_table44.pl input output\n";
@@ -14,6 +14,7 @@ our $output = $ARGV[1];
 
 my ($query_name, $query_length, $hit_name, $hit_length, $hsp_length, $identity, $evalue, $score, $strand, $query_start, $query_end, $hit_start, $hit_end, $query_to_end, $hit_to_end);
 my ($identity2, $aligned_query,$aligned_hit,$aligned_string); #增加4列信息
+my ($query_strand, $hit_strand);
 my (%hsp, $hsp_count); 
 %hsp = ();$hsp_count=0; 
 my $query_sequenc; 
@@ -22,7 +23,7 @@ my $is_hsp = 1;
 
 open(IN, "$input");
 open(OUT, ">$output");
-#print OUT "query_name\tquery_length\thit_name\thit_length\thsp_length\tidentity\tevalue\tscore\tstrand\tquery_start\tquery_end\thit_start\thit_end\tidentity2\taligned_query\taligned_hit\taligned_string;
+#print OUT "#query_name\tquery_length\thit_name\thit_length\thsp_length\tidentity\tevalue\tscore\tstrand\tquery_start\tquery_end\thit_start\thit_end\tidentity2\taligned_query\taligned_hit\taligned_string;
 while (<IN>) 
 {
 	chomp;
@@ -118,7 +119,7 @@ while (<IN>)
 
 	elsif (/\s+Frame = ([\+\-]\d) \/ ([\+\-]\d)/ && $hsp_count >= 1)
 	{
-	        my ($a, $b)=($1,$2);
+	    my ($a, $b)=($1,$2);
 		$strand = "[".$a."/".$b."]";
 		if ( $a =~ /\+/ ) { $query_strand = 1;} else { $query_strand = -1;}
 		if ( $b =~ /\+/ ) { $hit_strand = 1;} else { $hit_strand = -1;}

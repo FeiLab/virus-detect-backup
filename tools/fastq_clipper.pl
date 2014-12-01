@@ -46,7 +46,6 @@ print "distance is $distance\n";
 our $adapter_substr = substr($adapter, 0, $adapter_offset);#取出实际用于匹配的adapter部分，从第1个字符开始，共得到$adapter_offset个字符
 
 #主程序开始
-
 open(IN1,$filelist) || die "Can't open the sample list file\n";
 while(<IN1>){
 	chomp;	
@@ -76,7 +75,7 @@ sub trim_fastq{
 	my $id2;                #fastq文件中每个read的第3行
 	my $i = 0;              #用于读fastq文件循环内部，i表示fastq文件的第i行
 	
-    	open(IN2, $input_file) || die "Can't open the fastq file\n";
+    open(IN2, $input_file) || die "Can't open the fastq file\n";
 	open(OUT1, ">$output_file1") || die "can't create $output_file1 $!\n";#文件句柄与文件名映射
 	open(OUT2, ">$output_file2") || die "can't create $output_file2 $!\n";#文件句柄与文件名映射
 	open(OUT3, ">$output_file3") || die "can't create $output_file3 $!\n";#文件句柄与文件名映射
@@ -88,18 +87,12 @@ sub trim_fastq{
 		}
 		if($i%4 == 2){    #如果当前行是DNA序列,注意只有这里接受返回值
 			$DNAseq = $_; #提取该DNA序列
-
-
 			$match_position = adapter_match($DNAseq,$adapter_substr);#DNA序列与barcode序列匹配
-
-			#print "$DNAseq,$adapter_substr,$match_position\n";
-
 		}
 		if($i%4 == 3){    #如果当前行是另一个ID行
 			$id2 = $_;
 		}
 		if($i%4 == 0){    #如果当前行是质量序列（4的整数倍），根据匹配结果，开始输出		  
-
 			if ($match_position ==0){#表示整条DNA都是污染，保存到".null"文件
 				print OUT3 $id1."\n".$DNAseq."\n".$id2."\n".$_."\n";#输出整条序列
 			}
@@ -112,6 +105,8 @@ sub trim_fastq{
 				my $trimmed_DNAseq = substr($DNAseq, 0, $match_position); #保留DNA序列上，barcode匹配点之前的部分
 		        my $trimmed_qual = substr($_, 0, $match_position);        #保留质量序列上，barcode匹配点之前的部分
 				print OUT1 $id1."\n".$trimmed_DNAseq."\n".$id2."\n".$trimmed_qual."\n";#输出trimmed后剩下的序列
+				#my $pcr_primer = substr($DNAseq, $match_position, length($DNAseq)); #切掉的pcr_primer序列，用于检查，实际使用时要注释掉
+				#print $pcr_primer."\n";#输出切掉的pcr_primer序列，用于检查，实际使用时要注释掉
 			}		
 		}#输出结束	
 	}
@@ -127,17 +122,18 @@ sub trim_fastq{
 }
 
 sub adapter_match{
+    # 每次只能考虑read第i个位置开始的固定长度的子序列，与adapter前12个bp（默认）匹配
+	# 如果包括的接头小于这个长度就没法识别，会被当做不含接头的序列扔掉
 	my $read_seq = shift;    #得到第1个参数，read序列
 	my $adapter_seq = shift; #得到第2个参数，adapter序列
 	my $read_len = length($read_seq);	
 	my $position = $read_len;	#返回值初始值为全长，表示没有找到匹配
-	my $min_offset= length($adapter_seq);
+	my $min_offset=10;
  
 	if($levenshtein==1){#如果采用levenshtein距离
 		for(my $i = 0; $i< $read_len-$adapter_offset+1; $i++){ 
 			my $read_substr = substr($read_seq, $i, $adapter_offset);#检查过，没问题
 			my $editDistance = levenshtein($read_substr,$adapter_seq);
-
 			if ($editDistance <= $distance){
 				$position=$i;  #记下这个位置，返回为了下一步trim
 				last;          #找到了，就不继续找了，跳出循环	
@@ -148,8 +144,7 @@ sub adapter_match{
 		for(my $i = 0; $i< $read_len-$min_offset+1; $i++){            
 			my $read_substr = substr($read_seq, $i, $adapter_offset);#注意如果剩下的长度不够$adapter_offset，有多少截取多少而不报错
 			my $editDistance = hamming($read_substr,$adapter_seq);#$read_substr有可能短于$adapter_offset，短的必须在前面
-
-			if ($editDistance <= $distance){
+			if ($editDistance <= $distance){				
 				$position=$i;  #记下这个位置，返回为了下一步trim
 				last;          #找到了，就不继续找了，跳出循环	
 			}			

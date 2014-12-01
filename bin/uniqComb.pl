@@ -14,11 +14,11 @@ my $info = <<INFO;
 perl $0 srchFile -index indxFile -col indxCol -newCol srchCol [-exist]
 INFO
 
-#srchFile£ºÐèÒªÌáÈ¡Êý¾ÝµÄfile
-#-index£º×÷ÎªindexµÄfile
-#-col£ºindex fileµÄÄÄ¼¸ÁÐÓÃÀ´±È½Ï£¬ÓÃ","·Ö¸î
-#-newCol£ºsrchFileµÄÄÄ¼¸ÁÐÓÃÀ´±È½Ï£¬ÓÃ","·Ö¸î
-#-exist:Êä³öÏàÍ¬µÄ»¹ÊÇ²»Í¬µÄ
+# srchFileï¼šéœ€è¦æå–æ•°æ®çš„file
+#-indexï¼šä½œä¸ºindexçš„file
+#-colï¼šindex fileçš„å“ªå‡ åˆ—(0å¼€å§‹è®¡æ•°)ç”¨æ¥æ¯”è¾ƒï¼Œç”¨","åˆ†å‰²
+#-newColï¼šsrchFileçš„å“ªå‡ åˆ—ç”¨æ¥æ¯”è¾ƒï¼Œç”¨","åˆ†å‰²
+#-exist:è¾“å‡ºç›¸åŒçš„è¿˜æ˜¯ä¸åŒçš„ï¼Œé»˜è®¤ä¸ºä¸åŒçš„ï¼Œç›¸åŒçš„éœ€è¦åŠ æ­¤å‚æ•°
 
 !@ARGV and -t and die "$info"; 
 $opts{help} and die "$info";

@@ -34,7 +34,7 @@ our $file_list;#包括所有待处理的样本的文本文件名称（无后缀�
 our $reference;#包括全部参考序列的文件名称（FASTA格式）
 our $index_name;#参考序列的索引名称
 our $coverage;  #每条参考序列如果被reads覆盖的部分占全长比例的阈值
-our $max_dist = 1; # 
+our $max_dist = 1; #以下6个BWA参数用于将数据map到病毒库
 our $max_open = 1; #
 our $max_extension = 1; # 
 our $len_seed = 15; #
@@ -126,8 +126,8 @@ main: {
 		system("rm bwa.log");
 	}
 	close(IN);
-	print "###############################\n";
 	print "All the input files have been processed by $0\n";
+	print "###############################\n";
 	system("touch bwa-alignAndCorrect.run.finished");#建立这个文件，表示结束标志
 }
 

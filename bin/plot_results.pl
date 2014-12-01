@@ -22,7 +22,9 @@ my %out;
 my %index;
 my $line_number=0;
 open(IN1, "$input1");
-open(OUT, ">$output_file" );#输出一个表格
+open(OUT, ">$output_file" );#html输出文件的句柄
+
+# 下面定义风格单，共输出7列内容
 my $out_table = qq'
 <style type="text/css">
 td,th
@@ -35,14 +37,14 @@ td,th
   <tr bgcolor=#e2e8ec>
     <th>Reference</th>
     <th>Length</th>
-    <th>Coverage(%)</th>
-    <th>#contig</th>
+    <th>Read_cov(%)</th>
+    <th>#(Contig_cov%)</th>
     <th>Depth</th>
     <th>Genus</th>
-    <th width="50%">Description</th>
+    <th width="40%">Description</th>
   </tr>';
 
-#下面根据上面的格式，输出到html文件
+# 下面根据上面的格式，输出到html文件
 while (<IN1>) {
 	chomp;
 	$line_number++;	
@@ -50,18 +52,18 @@ while (<IN1>) {
 	$all_hits{$each_line[0]}=1; 
 	$index{$each_line[0]}=$line_number;
 	my $link="$type"."_references/".$each_line[0].".html";
-	my $coverage= sprintf("%.3f", $each_line[3])*100;
-	my $contigs= $each_line[5];
-	my $depth= sprintf("%.1f", $each_line[6]);
+	my $read_cov_ratio= sprintf("%.3f", $each_line[3])*100; # 输入文件第4列小数点后面取三位，再转百分数
+	my $contig_cov_ratio= sprintf("%.3f", $each_line[9])*100; # 输入文件第10列小数点后面取三位，再转百分数	
+	my $depth= sprintf("%.1f", $each_line[6]);        # 输入文件第7列小数点后面取一位
 	$out_table .= qq' 
    <tr>
         <td><a href="$link">$each_line[0]</a></td>
         <td>$each_line[1]</td>
-        <td>$each_line[2]($coverage)</td>
-        <td>$contigs</td>	
+        <td>$each_line[2]($read_cov_ratio)</td>
+        <td>$each_line[5]($contig_cov_ratio)</td>	
         <td>$depth</td>
         <td>$each_line[7]</td>	
-	<td width="50%">$each_line[8]</td>	
+		<td width="40%">$each_line[8]</td>	
    </tr>';	
 }
 close(IN1);

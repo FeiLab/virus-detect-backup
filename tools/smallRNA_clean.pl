@@ -55,8 +55,8 @@ our $virus_reference= "virus_genbank186.fasta";#包括全部参考序列的文件名称（FAST
 
 our $adapter;         #adapter序列,所有的数据都是同一个adapter
 our $adapterLen=11;  #原始adapter序列的前adapter_offset个bp，否则就用adapter全长用来匹配
-our $n_Cutoff=1;
-our $read_Length=15; 
+our $n_Cutoff=1;     #剩下的reads中，有一个N就不要
+our $read_Length=15; #最后留下的reads必须大于15bp长度
 our $read_PerYield=5e5;#5Mreads*4*100=2G字节
  
 our $max_dist = 1;  #bwa允许的最大编辑距离 
@@ -107,14 +107,14 @@ unless ($file_list) {
 main: {
     #这部分是clipper过程，如果不需要可以注释掉
 	system("$Tools/fastq_clipper.pl --filelist $file_list --suffix $suffix --adapter $adapter --adapterLen $adapterLen --distance 1");
-	#system("$Tools/fastq_clipper.pl --filelist $file_list --suffix unmatched1 --adapter $adapter --adapterLen $adapterLen --distance 2");
-	system("$BIN_DIR/files_combine1.pl --filelist $file_list --suffix trimmed --startNumber 1 --endNumber 1");
+	system("$Tools/fastq_clipper.pl --filelist $file_list --suffix unmatched1 --adapter $adapter --adapterLen $adapterLen --distance 2");
+	system("$BIN_DIR/files_combine1.pl --filelist $file_list --suffix trimmed --startNumber 1 --endNumber 2");
 	system("rm *.trimmed1");
-	#system("rm *.trimmed2");
+	system("rm *.trimmed2");
 	system("rm *.null1");
-	#system("rm *.null2");
+	system("rm *.null2");
 	system("rm *.unmatched1");
-	#system("rm *.unmatched2");
+	system("rm *.unmatched2");
     #先去除含有1个"N"以上的reads，最后去除短reads（<15bp）
 	if($run_R){
 		system("Rscript $BIN_DIR/run_sRNA_clean.R filelist=$file_list nCutoff=$n_Cutoff readLength=$read_Length RdPerYield=$read_PerYield");

@@ -73,8 +73,8 @@ main: {
 	close(IN);
 	close(OUT1);
 	system("rm velvet.log");
-	print "###############################\n";
 	print "All the samples have been processed by $0\n";
+	print "###############################\n";
 	system("touch velvet_assembly.run.finished");
 }
 

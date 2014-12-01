@@ -37,7 +37,7 @@ while (<IN>) {
 			$high_identity=$cols[5];#记录最高的identity
 			print OUT $_;#query的第一个hit肯定要，因为是evalue最低的
 		}else{
-			if ($current_hit ne $last_hit && ($current_identity >= $high_identity-$identity_dropoff))#相同的<query,hit>中，只保留evalue最低的(即第一个)
+			if ($current_hit ne $last_hit && ($current_identity >= $high_identity-$identity_dropoff))#必须是不同的hit，而且identity下降不超过5个点
 			{
 				print OUT $_;	
 			}	

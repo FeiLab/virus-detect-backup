@@ -94,6 +94,7 @@ while(<IN1>){
 	}
 	#否则，移动到当前目录来去冗余
 	system ("$BIN_DIR/dust $CONTIG_DIR/$sample.$input_suffix 1> $sample.masked 2> dust.log");#首先mask简单重复序列
+	#去掉简单重复序列，可以大大节省序列合并的时间
 	system ("$BIN_DIR/trim_XNseq1.pl $sample.masked $CONTIG_DIR/$sample.$input_suffix 0.8 40 > $sample.$input_suffix");
 	system ("rm $sample.masked");
 	system ("rm $CONTIG_DIR/$sample.$input_suffix");
@@ -113,10 +114,26 @@ while(<IN1>){
 		#更新contig_num2
 		$contig_num2 =  `grep \'>\' inset | wc -l `;#校正后生成的contigs
 		chomp($contig_num2);	
-              	system ("mv inset $sample.contigs$i.fa");	
+		system ("mv inset $sample.contigs$i.fa");	
 	}
 	#去冗余完毕，开始进行base correction
-	my $sample_reference= $sample.".contigs$i.fa";#去除冗余的结果文件，产生新contigs，将作为参考，进行校正
+	my $sample_reference= $sample.".contigs$i.fa";
+	
+	#这里需要检测结果文件是否为空，处理无法组装出新序列的情况
+	system "wc -l $sample.contigs$i.fa";
+	my $content_sig =  `grep \'>\' $sample.contigs$i.fa | wc -l `;#校正后生成的contigs		
+	chomp($content_sig);
+	# 如果为空，则跳过该样本
+	if (!$content_sig){
+		print "Skip sample:$sample\n";
+		# 要确保一下两个文件必须存在
+		system "touch ./aligned/$sample.aligned.fa" unless (-e "./aligned/$sample.aligned.fa");
+		system "touch ./assembled/$sample.assembled.fa" unless (-e "./assembled/$sample.assembled.fa");
+		system("rm $sample.contigs$i.fa");
+		next;
+	}
+		
+	#去除冗余的结果文件，产生新contigs，将作为参考，进行校正
 	my $sample_reads= $sample.".clean";#read文件，需要align到新contigs上	
 	#aligment -> sam -> bam -> sorted bam -> pileup
 	my $format="-q";
@@ -138,6 +155,7 @@ while(<IN1>){
 	&process_cmd("java -cp $BIN_DIR extractConsensus $sample 1 40 $i");
 	system("$BIN_DIR/renameFasta.pl --inputfile $sample.contigs$i.fa --outputfile contigs --prefix $contig_prefix");#每条序列的名字要统一命名以去除重复
 	system ("mv contigs $CONTIG_DIR/$sample.$contig_type.fa");#去冗余得到的最终文件转回到$CONTIG_DIR目录
+	
 	#删除本次循环中产生的中间文件
 	system("rm $sample.sam");
 	system("rm $sample.bam");
@@ -149,8 +167,8 @@ while(<IN1>){
 	system("rm $sample.contigs$i.fa");	
 }
 close(IN1);
-print "###############################\n";
 print "All the samples have been processed by $0\n";
+print "###############################\n";
 system("touch removeRedundancy_batch.$contig_type.finished");#建立这个文件，表示结束标志
 system("rm tem.*");
 system("rm tem");

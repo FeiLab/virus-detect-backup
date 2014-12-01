@@ -138,8 +138,8 @@ while(<IN1>){
 	system("rm $sample.contigs$i.fa");	
 }
 close(IN1);
-print "###############################\n";
 print "All the samples have been processed by $0\n";
+print "###############################\n";
 system("touch removeRedundancy_batch.$contig_type.finished");#建立这个文件，表示结束标志
 system("rm *.log");
 

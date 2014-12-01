@@ -6,7 +6,7 @@ use Cwd;
 my $usage = <<_EOUSAGE_;
 
 #########################################################################################
-# virus_detect.pl --file_list <FILE> --file_type [String] --reference [FILE] --coverage [Float]
+# $0 --file_list <FILE> --file_type [String] --reference [FILE] --coverage [Float]
 #                 --host_removal --host_reference [FILE] --objective_type [String]
 #                 --max_dist[INT] --max_open [INT] --max_extension [INT] --len_seed [INT] --dist_seed [INT] --thread_num [INT]
 #                 --strand_specific --min_overlap [INT] --max_end_clip [INT] --cpu_num [INT] --mis_penalty [INT] --gap_cost [INT] --gap_extension [INT]
@@ -123,16 +123,13 @@ main: {
 		if (/^combined$/) {system("rm -r combined");}
 		if (/\.finished$/) {system("rm $_");}
 		if (/\.result$/) {system("rm $_");}
-		#if (/\.output$/) {system("rm $_");}
-		#if (/\.out$/) {system("rm $_");}
+		if (/\.output$/) {system("rm $_");}
+		if (/\.out$/) {system("rm $_");}
 	}
 	closedir DIR; 
 	
 	#detect 已知病毒
 	system("mkdir aligned");
-
-	print "alignend\n";
-
 	system("$BIN_DIR/bwa-alignAndCorrect.pl --file_list $file_list --reference $DATABASE_DIR/$reference --coverage $coverage --max_dist $max_dist --max_open $max_open --max_extension $max_extension --len_seed $len_seed --dist_seed $dist_seed --thread_num $thread_num");  
 
 	if($strand_specific){
@@ -144,9 +141,6 @@ main: {
 	}
 	
 	#detect 未知病毒
-
-	print "assembly contigs\n";
-
 	system("mkdir assembled");
 	if($host_removal){	
 		system("$BIN_DIR/bwa_remove.pl --file_list $file_list --reference $DATABASE_DIR/$host_reference --max_dist $max_dist --max_open $max_open --max_extension $max_extension --len_seed $len_seed --dist_seed $dist_seed --thread_num $thread_num");
@@ -160,9 +154,6 @@ main: {
 		system("$BIN_DIR/Velvet_Optimiser.pl --file_list $file_list --input_suffix $input_suffix  --file_type $file_type --objective_type $objective_type --hash_end 19 --coverage_end 25");
 		system("$BIN_DIR/runVelvet.pl --parameters optimization.result --input_suffix $input_suffix --file_type $file_type --output_suffix contigs1.fa");
 	}
-
-	print "remove redundancy\n";
-
 	if($strand_specific){
 	
 		system("$BIN_DIR/removeRedundancy_batch.pl --file_list $file_list --file_type $file_type --input_suffix contigs1.fa --contig_type assembled --contig_prefix NOVEL --min_overlap $min_overlap --max_end_clip $max_end_clip --cpu_num $cpu_num --mis_penalty $mis_penalty --gap_cost $gap_cost --gap_extension $gap_extension");
@@ -172,16 +163,13 @@ main: {
 	}
 
 	#病毒合并
-
-	print "combine contigs\n";
 	system("mkdir combined");
 	system("$BIN_DIR/files_combine2.pl --filelist $file_list --folder1 aligned --folder2 assembled");
-
-	print "remove redundancy\n";
 	system("$BIN_DIR/removeRedundancy_batch.pl --file_list $file_list --file_type $file_type --input_suffix contigs1.fa --contig_type combined --contig_prefix CONTIG --strand_specific --min_overlap $min_overlap --max_end_clip $max_end_clip --cpu_num $cpu_num --mis_penalty $mis_penalty --gap_cost $gap_cost --gap_extension $gap_extension");
-
-
-	print "finished\n";
-	#system("touch virus_detect.run.finished");#建立这个文件，表示结束标志
-
+	print "All the samples have been processed by $0\n";
+	#这个输出到log，表示运行结束
+	print "###############################\n";
+	print "###############################\n\n";
+	#建立这个文件，也表示运行结束
+	system("touch virus_detect.run.finished");
 }

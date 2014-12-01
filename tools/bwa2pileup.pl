@@ -13,7 +13,7 @@ my $usage = <<_EOUSAGE_;
 # Required(3):
 #  --file_list A txt file containing a list of input file names without any suffix
 #  --reference A fasta file containing all the reference sequences
-#  --out_type  output mapped, sam, bam or pileup files
+#  --out_type  output mapped, sam, bam, pileup or contig files
 # 
 # Required(1):
 #  --index_type  
@@ -99,6 +99,11 @@ main: {
 		if($out_type eq "bam"){next;}
 		&process_cmd("$BIN_DIR/samtools sort $sample.bam $sample.sorted") unless (-s "$sample.sorted.bam");
 		&process_cmd("$BIN_DIR/samtools mpileup -f $reference $sample.sorted.bam > $sample.pileup") unless (-s "$sample.pileup");
+		if($out_type eq "pileup"){next;}
+		my $file_size= -s "$sample.pileup";#根据pileup文件大小是不是0，进入下面处理流程
+		if($file_size!=0){#如果文件大小不是0，
+			&process_cmd("java -cp $BIN_DIR extractConsensus $sample 0 40 1");#提取连续片段（depth>=1,length>=40），文件名含有1			
+		}
 	}
 	close(IN);
 	print "###############################\n";

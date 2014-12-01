@@ -1,8 +1,7 @@
 #!/usr/bin/perl -w 
-#findRedundancy(),ÌáÈ¡Ò»¸öquery¶ÔÓ¦µÄËùÓĞhitµÄËùÓĞhsp
 use strict; 
 use IO::File; 
-use Getopt::Long; #Õâ¸öÄ£¿é¿ÉÒÔ½ÓÊÜÍêÕû²ÎÊı
+use Getopt::Long; #è¿™ä¸ªæ¨¡å—å¯ä»¥æ¥å—å®Œæ•´å‚æ•°
 use Cwd;
 my $usage = <<_EOUSAGE_;
 
@@ -19,30 +18,30 @@ my $usage = <<_EOUSAGE_;
 _EOUSAGE_
 	;
 #################
-##   È«¾Ö±äÁ¿  ##
+##   å…¨å±€å˜é‡  ##
 #################	
-our $input;            #ĞèÒª´¦ÀíµÄÎÄ¼ş
+our $input;            #éœ€è¦å¤„ç†çš„æ–‡ä»¶
 our $diff_ratio;     
 our $output;            
 
 ################################
-##   ÉèÖÃËùÓĞÄ¿Â¼ºÍÎÄ¼şµÄÂ·¾¶ ##
+##   è®¾ç½®æ‰€æœ‰ç›®å½•å’Œæ–‡ä»¶çš„è·¯å¾„ ##
 ################################
-our $WORKING_DIR=cwd();#¹¤×÷Ä¿Â¼¾ÍÊÇµ±Ç°Ä¿Â¼
-our $BIN_DIR=$WORKING_DIR."/bin";#ËùÓĞ¿ÉÖ´ĞĞÎÄ¼şËùÔÚµÄÄ¿Â¼
+our $WORKING_DIR=cwd();#å·¥ä½œç›®å½•å°±æ˜¯å½“å‰ç›®å½•
+our $BIN_DIR=$WORKING_DIR."/bin";#æ‰€æœ‰å¯æ‰§è¡Œæ–‡ä»¶æ‰€åœ¨çš„ç›®å½•
 
 ##################
-## ³ÌĞò²ÎÊı´¦Àí ##
+## ç¨‹åºå‚æ•°å¤„ç† ##
 ##################
 &GetOptions( 'input=s' => \$input, 
 	'diff_ratio=f' => \$diff_ratio,	
 	'output=s' => \$output 	
 			 );
-unless ($input) {#Õâ¸ö²ÎÊıÍ¨¹ıÊäÈëµÃµ½
+unless ($input) {#è¿™ä¸ªå‚æ•°é€šè¿‡è¾“å…¥å¾—åˆ°
 die $usage;}
 			 
 #################
-##  Ö÷³ÌĞò¿ªÊ¼ ##
+##  ä¸»ç¨‹åºå¼€å§‹ ##
 #################
 			 
 my (@all_data, $name, $sequence); 
@@ -52,52 +51,52 @@ open(IN, "$input");
 while (<IN>) {
 	chomp; 
 	my @each_line = split(/\t/, $_);
-    my @contigs= split(/,/, $each_line[4]);#µÚ5ÁĞÊÇËùÓĞcontigµÄÃû³Æ
-    my $covered_bp=$each_line[7];
+    my @contigs= split(/,/, $each_line[4]);#ç¬¬5åˆ—æ˜¯æ‰€æœ‰contigçš„åç§°
+    my $covered_bp=$each_line[7];          #ç¬¬8åˆ—æ˜¯read covered bpæ€»æ•°ï¼Œä¸æ˜¯contigè¦†ç›–çš„bpæ€»æ•°
     if ($each_line[7] eq ""){$covered_bp=0;}	
-	push(@all_data, [scalar(@contigs), $covered_bp, $_]);#contigÊıÁ¿£¬covered bp×ÜÊı(alignment)ºÍÕûĞĞÊı¾İ
+	push(@all_data, [scalar(@contigs), $covered_bp, $_]);#contigæ•°é‡ï¼Œcovered bpæ€»æ•°å’Œæ•´è¡Œæ•°æ®
 }
 close(IN);
 
-my @inset;  #ÓÃÓÚ´æ´¢·ÇÈßÓàĞòÁĞ£¬ÕâÑù»áÔÙ´Î´æ´¢@all_dataÖĞµÄĞòÁĞ£¬Ó¦¸Ã¸Ä½øÎªÖ»±£´æindex
-my @restset = ''; #ÓÃÓÚ´æ´¢ÈßÓàĞòÁĞ£¬ÕâĞ©Êı¾İµÄ±£´æ½öÎªÁËĞ£¶ÔÓÃ
-@all_data = sort { -1*($a->[0] <=> $b->[0]) || -1*($a->[1] <=> $b->[1])} @all_data; #@all_dataÖĞÊı¾İ°´ÕÕcontigÊıÁ¿£¬È»ºócovered bp×ÜÊı½µĞòÅÅĞò
-=head;#µ÷ÊÔÊ±£¬Êä³ö¿´Ò»ÏÂ
+my @inset;  #ç”¨äºå­˜å‚¨éå†—ä½™åºåˆ—ï¼Œè¿™æ ·ä¼šå†æ¬¡å­˜å‚¨@all_dataä¸­çš„åºåˆ—ï¼Œåº”è¯¥æ”¹è¿›ä¸ºåªä¿å­˜index
+my @restset = ''; #ç”¨äºå­˜å‚¨å†—ä½™åºåˆ—ï¼Œè¿™äº›æ•°æ®çš„ä¿å­˜ä»…ä¸ºäº†æ ¡å¯¹ç”¨
+@all_data = sort { -1*($a->[0] <=> $b->[0]) || -1*($a->[1] <=> $b->[1])} @all_data; #@all_dataä¸­æ•°æ®æŒ‰ç…§contigæ•°é‡ï¼Œç„¶åcovered bpæ€»æ•°é™åºæ’åº
+=head;#è°ƒè¯•æ—¶ï¼Œè¾“å‡ºçœ‹ä¸€ä¸‹
 for my $tr (@all_data) {
  print $tr->[2]."\n";
 }
 =cut;
 my $contig_count=1; 
 for my $tr (@all_data) {
-	if (scalar(@inset)  == 0) {#µÚÒ»´Î
-		push(@inset, $tr->[2]); #°ÑcontigÊıÁ¿×î¶àµÄÒ»ÌõhitÏÈ·Å½øÀ´
+	if (scalar(@inset) == 0) {#ç¬¬ä¸€æ¬¡
+		push(@inset, $tr->[2]); #æŠŠcontigæ•°é‡æœ€å¤šçš„ä¸€æ¡hitå…ˆæ”¾è¿›æ¥
 	}else{
 		my @aa = split(/\t/, $tr->[2]);
 		#print $tr->[2]."\n";
 		my $return_string = &ifRedundant(\@inset, \$aa[4]);
-		if ($return_string eq "n") {#Èç¹ûqueryÊÇ·ÇÈßÓà£¬°üÀ¨½øÀ´
+		if ($return_string eq "n") {#å¦‚æœqueryæ˜¯éå†—ä½™ï¼ŒåŒ…æ‹¬è¿›æ¥
 			push(@inset, $tr->[2]); 
-		}else{#Èç¹ûqueryÊÇÈßÓà£¬ÈÓµô
+		}else{#å¦‚æœqueryæ˜¯å†—ä½™ï¼Œæ‰”æ‰
 			push(@restset, $tr->[2]); 
 		}
 	}
 }
 
-open(OUT1, ">$output");#½«ËùÓĞ·ÇÈßÓàĞòÁĞÊä³ö
+open(OUT1, ">$output");#å°†æ‰€æœ‰éå†—ä½™åºåˆ—è¾“å‡º
 for my $tr (@inset) {
 	print OUT1 $tr."\n";
 }
 close(OUT1);
 
-=head;#Ã»ÓÃ£¬¾Í²»Êä³öÁË
-open(OUT2, ">restset");#½«ËùÓĞÈßÓàĞòÁĞÊä³ö
+=head;#æ²¡ç”¨ï¼Œå°±ä¸è¾“å‡ºäº†
+open(OUT2, ">restset");#å°†æ‰€æœ‰å†—ä½™åºåˆ—è¾“å‡º
 for my $tr (@restset) {
 	print OUT2 $tr."\n";
 }
 close(OUT2);
 =cut;
 #######################
-##     ×Ó³ÌĞò¿ªÊ¼    ##
+##     å­ç¨‹åºå¼€å§‹    ##
 #######################
 sub ifRedundant {
 	my ($inset, $query) = @_; 
@@ -107,11 +106,11 @@ sub ifRedundant {
 		my @aa = split(/\t/, $tr);
 		my @contigs= split(/,/, $aa[4]);
 		my %contigs;
-		for my $each_contig (@contigs) {#Ê×ÏÈ°Ñ±¾´ÎËùÓĞµÄ
+		for my $each_contig (@contigs) {#é¦–å…ˆæŠŠæœ¬æ¬¡æ‰€æœ‰çš„
 			$contigs{$each_contig}=1;
 		}
-		my $total_contigs=0;#×¢ÒâÃ¿´Î±ØĞë³õÊ¼»¯
-		my $diff_contigs=0; #×¢ÒâÃ¿´Î±ØĞë³õÊ¼»¯
+		my $total_contigs=0;#æ³¨æ„æ¯æ¬¡å¿…é¡»åˆå§‹åŒ–
+		my $diff_contigs=0; #æ³¨æ„æ¯æ¬¡å¿…é¡»åˆå§‹åŒ–
 		for my $each_contig (@query_contigs) {
 			$total_contigs++;
 			if(not defined $contigs{$each_contig}){
@@ -119,9 +118,9 @@ sub ifRedundant {
 			}
 		}
 		$ratio=$diff_contigs*1.0/$total_contigs;
-		if($ratio<=$diff_ratio){return "r";} #Ò»µ©·¢ÏÖÓĞÏàËÆcontig£¬¾ÍÈÏÎªÊÇÈßÓà£¬Á¢¿Ì·µ»Ø
+		if($ratio<=$diff_ratio){return "r";} #ä¸€æ—¦å‘ç°æœ‰ç›¸ä¼¼contigï¼Œå°±è®¤ä¸ºæ˜¯å†—ä½™ï¼Œç«‹åˆ»è¿”å›
 	}
-	return "n";#Èç¹ûinsetÖĞµÄËùÓĞÊı¾İ±È½ÏÒ»±éºó£¬Ã»ÓĞ·¢ÏÖÏàËÆµÄ£¬¾ÍÈÏÎª²»ÊÇÈßÓàµÄ¼ÇÂ¼
+	return "n";#å¦‚æœinsetä¸­çš„æ‰€æœ‰æ•°æ®æ¯”è¾ƒä¸€éåï¼Œæ²¡æœ‰å‘ç°ç›¸ä¼¼çš„ï¼Œå°±è®¤ä¸ºä¸æ˜¯å†—ä½™çš„è®°å½•
 }
 sub process_cmd {
 	my ($cmd) = @_;	

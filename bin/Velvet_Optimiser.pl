@@ -124,8 +124,8 @@ main: {
 	close(OUT1);
 	close(OUT2);
 	system("rm velvet.log");
+    print "All the samples have been processed by $0\n";
 	print "###############################\n";
-        print "All the samples have been processed by $0\n";
 	system("touch Velvet_Optimiser.run.finished");#建立这个文件，表示结束标志
 }
 

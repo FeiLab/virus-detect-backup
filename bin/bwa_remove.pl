@@ -90,8 +90,8 @@ main: {
 		system("rm $sample.mapped");
 	}
         close(IN);
-	print "###############################\n";
 	print "All the input files have been processed by $0\n";
+	print "###############################\n";
 	system("touch $index_name.remove.run.finished");#建立这个文件，表示结束标志
 }
 ####

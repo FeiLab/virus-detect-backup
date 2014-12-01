@@ -1,7 +1,7 @@
 #!/usr/bin/perl -w 
 use strict; 
 # usage: pileup_depth.pl inputfile outputfile
-# 从pileup中提取每个chr的平均depth信息
+# 从pileup中提取每个chr的平均depth信息,但是只考虑所有被覆盖的位点。
 if (@ARGV < 1)
 {
   print "usage: pileup_depth.pl inputfile outputfile\n";

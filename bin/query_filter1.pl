@@ -3,11 +3,15 @@ use strict;
 # 来自blast_parse_table2.pl程序的输出
 # query_name	query_length	hit_name	hit_length	hsp_length	identity	evalue	score	strand	query_start	query_end	hit_start	hit_end
 # 其中0、1、9、10是必须的
-# 将blast结果的table中的query被hit覆盖的全部长度加起来，然后除以query总长度，得到一个ratio
-# 所有的hit必须要求大于一定的identity
-# 把query被覆盖超过一定ratio的记录下来，然后从一个fasta文件中提取记录中不包括的相应序列，输出到output1
-# 剩下的序列的名称输出到ouput2
-# 如果hit都是病毒，可以用这个ratio来判断所得到contig是不是病毒
+# inputfile1是blast得到的table文件
+# inputfile2是query的序列文件（Fasta格式）
+# 用大于一定的identity的hsp来计算query被hsp覆盖的ratio
+# 这个ratio等于符合要求的hsp长度累加，然后除以query长度
+# 符合要求的query的序列输出到output2（query_id\t序列）
+# 不符合要求的query的序列输出到output1（Fasta格式）
+
+# 如果hit都是病毒，可以用这个ratio来判断所得到的contig是不是病毒
+# 通过这个程序，将query的序列文件分为两个序列文件，一个是与已知病毒相似的，一个是不相似的（可能包括新病毒）
 if (@ARGV < 2)
 {
   print "usage: query_filter1.pl inputfile1 inputfile2 output1 identity min_ratio > output2\n";
@@ -16,7 +20,7 @@ if (@ARGV < 2)
 
 our $input1 = $ARGV[0]; #
 our $input2 = $ARGV[1]; #
-our $output = $ARGV[2]; #这是要得到的输出文件，包括了所有提取的序列
+our $output1 = $ARGV[2];#
 our $identity = $ARGV[3];#需要累积的hsp的identity最小值
 our $min_ratio = $ARGV[4];#一个query累计被covered的最小比例
 
@@ -65,7 +69,7 @@ for my $tk (sort keys %blk) {#先根据query排序，然后提取所有需要filtered掉的query
 
 #从input2中把不包括在%query_filtered中的序列提取出来，输出到OUT
 open(IN2, $input2);
-open(OUT, ">$output");
+open(OUT, ">$output1");
 my $flag = "off";
 while(<IN2>) {
 	if($_ =~ m/^>/) {
